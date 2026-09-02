@@ -24,8 +24,6 @@ PRODUCTION = os.getenv('PRODUCTION', 'False').lower() == 'true'
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# test
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
@@ -34,7 +32,6 @@ SECRET_KEY = 'django-insecure-8@g)32wm(51+bg+5jt#a)b0!ceh_6*2fcdu78$$o0y0ifcn+63
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
-
 
 # Application definition
 
