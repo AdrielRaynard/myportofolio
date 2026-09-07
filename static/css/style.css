@@ -415,6 +415,11 @@ h1, .brand {
     display: none;
 }
 
+.site-wrapper {
+    color: var(--ink);
+    background-color: var(--paper);
+    min-height: 100vh;
+}
 
 /* dark mode */
 
@@ -428,6 +433,10 @@ h1, .brand {
     --surface: #292522;
     --surface-deep: #211e1b;
     --desc-bg: rgba(245, 241, 235, 0.05);
+
+    color: var(--ink);
+    background-color: var(--paper);
+    min-height: 100vh;
 }
 
 
