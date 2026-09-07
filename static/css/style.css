@@ -373,3 +373,103 @@ h1, .brand {
         gap: 2rem;
     }
 }
+
+/* =========================
+   DARK / LIGHT MODE
+   Checkbox Hack - CSS Only
+   ========================= */
+
+/* Menyembunyikan checkbox */
+.theme-toggle-input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Tombol untuk mengganti tema */
+.theme-toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--ink);
+    background-color: var(--paper);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.theme-toggle-label:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+.theme-icon {
+    font-size: 0.9rem;
+    line-height: 1;
+}
+
+.theme-icon--dark {
+    display: none;
+}
+
+
+/* dark mode */
+
+#theme-toggle:checked ~ .site-wrapper {
+    --ink: #f5f1eb;
+    --paper: #181614;
+    --accent: #ef7955;
+    --accent-dark: #ff9878;
+    --line: #3a3530;
+    --text-muted: #b8afa4;
+    --surface: #292522;
+    --surface-deep: #211e1b;
+    --desc-bg: rgba(245, 241, 235, 0.05);
+}
+
+
+/* Ganti icon matahari menjadi bulan */
+
+#theme-toggle:checked ~ .site-wrapper .theme-icon--light {
+    display: none;
+}
+
+#theme-toggle:checked ~ .site-wrapper .theme-icon--dark {
+    display: inline;
+}
+
+
+/* Penyesuaian Skills saat Dark Mode */
+
+#theme-toggle:checked ~ .site-wrapper .skill-item:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+
+/* Penyesuaian tombol social saat Dark Mode */
+
+#theme-toggle:checked ~ .site-wrapper .social-link {
+    color: #181614;
+    background-color: #f5f1eb;
+}
+
+#theme-toggle:checked ~ .site-wrapper .social-link:hover {
+    color: #181614;
+    background-color: var(--accent);
+}
+
+/* mobile */
+@media (max-width: 600px) {
+
+    .theme-toggle-label {
+        padding: 0.3rem 0.55rem;
+    }
+
+    .theme-toggle-text {
+        display: none;
+    }
+
+}

@@ -10,12 +10,19 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
+    <input type="checkbox" id="theme-toggle" class="theme-toggle-input">
+    <div class="site-wrapper">
     <header class="site-header">
         <div class="container">
             <a href="#profile" class="brand">Adriel</a>
             <nav>
                 <a href="#profile">Profile</a>
                 <a href="#skills">Skills</a>
+                <label for="theme-toggle" class="theme-toggle-label">
+                    <span class="theme-icon theme-icon--light">☀</span>
+                    <span class="theme-icon theme-icon--dark">☾</span>
+                    <span class="theme-toggle-text">Theme</span>
+                </label>
             </nav>
         </div>
     </header>
@@ -59,38 +66,29 @@
                     <li class="skill-item">
                         <span class="skill-index">01</span>
                         <div class="skill-body">
-                            <div class="skill-heading">
-                                <h3>Team Management and Leadership</h3>
-                                <span class="skill-category">Soft Skill</span>
-                            </div>
-                            <p class="skill-desc">Terbiasa memimpin tim dalam organisasi dan kepanitiaan kampus,
+                            <h3>Team Management and Leadership</h3>
+                            <span class="skill-tag skill-tag--soft">Terbiasa memimpin tim dalam organisasi dan kepanitiaan kampus,
                                 mulai dari merancang rencana kerja hingga memastikan setiap anggota bekerja sesuai dengan perannya.
-                            </p>
+                            </span>
                         </div>
                     </li>
                     <li class="skill-item">
                         <span class="skill-index">02</span>
                         <div class="skill-body">
-                            <div class="skill-heading">
-                                <h3>Organizational and Financial Management</h3>
-                                <span class="skill-category">Soft Skill</span>
-                            </div>
-                            <p class="skill-desc">Berpengalaman mengelola organisasi serta
+                            <h3>Organizational and Financial Management</h3>
+                            <span class="skill-tag skill-tag--soft">Berpengalaman mengelola organisasi serta 
                                 dan mengawasi anggaran, mulai dari perencanaan dana hingga laporan pertanggungjawaban.
-                            </p>
+                            </span>
                         </div>
                     </li>
                     <li class="skill-item">
                         <span class="skill-index">03</span>
                         <div class="skill-body">
-                            <div class="skill-heading">
-                                <h3>Intermediate Programming <small>(Python &amp; Java)</small></h3>
-                                <span class="skill-category">Technical</span>
-                            </div>
-                            <p class="skill-desc">Menuliskan program dan menyelesaikan masalah
-                                logika dengan menggunakan bahasa Python dan Java, serta memahami
+                            <h3>Intermediate Programming <small>(Python &amp; Java)</small></h3>
+                            <span class="skill-tag skill-tag--tech">Menuliskan program dan menyelesaikan masalah 
+                                logika dengan menggunakan bahasa Python dan Java, serta memahami 
                                 konsep Object-Oriented Programming (OOP).
-                            </p>
+                            </span>
                         </div>
                     </li>
                 </ul>
@@ -103,5 +101,6 @@
             <p>&copy; 2026 Adriel. Fakultas Ilmu Komputer, Universitas Indonesia.</p>
         </div>
     </footer>
+    </div>
 </body>
 </html>
