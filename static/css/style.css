@@ -289,8 +289,6 @@ h1, .brand {
     font-size: 0.85em;
 }
 
-/* One consistent badge style for every skill, only the label text changes.
-   This replaces the old mismatched pill colors with a single, uniform look. */
 .skill-category {
     display: inline-block;
     font-size: 0.62rem;
@@ -303,10 +301,6 @@ h1, .brand {
     background-color: rgba(217, 93, 57, 0.12);
     color: var(--accent-dark);
 }
-
-/* One consistent description box for every skill: same background tone,
-   same border accent, same text color — tidy and predictable instead of
-   a different colored blob per item. */
 .skill-desc {
     margin: 0;
     font-size: 0.85rem;
