@@ -26,7 +26,7 @@ h1, .brand {
 }
 
 .container {
-    max-width: 960px;
+    max-width: 1180px;
     margin: 0 auto;
     padding: 0 1.5rem;
 }
@@ -62,8 +62,14 @@ h1, .brand {
 }
 
 
-.hero {
-    padding: 4.5rem 0 5rem;
+/* About Me + Skills now share one row: About Me stays wide (left),
+   Skills sits to the right as a narrower, vertical sidebar. */
+.page-grid {
+    display: grid;
+    grid-template-columns: 2.3fr 1fr;
+    align-items: start;
+    gap: 2.5rem;
+    padding: 4.5rem 1.5rem 5rem;
 }
 
 .hero-grid {
@@ -93,7 +99,7 @@ h1, .brand {
 }
 
 .hero-identity h1 {
-    font-size: clamp(3rem, 7vw, 5rem);
+    font-size: clamp(2.5rem, 6vw, 5rem);
     line-height: 0.95;
 }
 
@@ -172,11 +178,100 @@ h1, .brand {
 }
 
 
+/* --- Skills sidebar --- */
+.skills {
+    background-color: #ffffff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 1.75rem 1.5rem;
+    align-self: stretch;
+}
+
+.skills-kicker {
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-dark);
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+}
+
+.skills-title {
+    font-family: "Space Grotesk", -apple-system, sans-serif;
+    font-size: 1.4rem;
+    margin-bottom: 1.5rem;
+}
+
+.skills-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+}
+
+.skill-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    padding: 0.85rem;
+    border-left: 3px solid var(--line);
+    border-radius: var(--radius);
+}
+
+.skill-index {
+    font-family: "Space Grotesk", -apple-system, sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--accent-dark);
+    flex-shrink: 0;
+    padding-top: 0.1rem;
+}
+
+.skill-body h3 {
+    font-size: 0.95rem;
+    line-height: 1.35;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.skill-body h3 small {
+    font-weight: 500;
+    color: var(--text-muted);
+    font-size: 0.85em;
+}
+
+.skill-tag {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+}
+
+.skill-tag--soft {
+    background-color: rgba(217, 93, 57, 0.12);
+    color: var(--accent-dark);
+}
+
+.skill-tag--tech {
+    background-color: var(--ink);
+    color: var(--paper);
+}
+
+
 .site-footer {
     padding: 1.5rem;
     color: var(--text-muted);
     font-size: 0.85rem;
     border-top: 1px solid var(--line);
+}
+
+@media (max-width: 880px) {
+    .page-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 600px) {
@@ -194,5 +289,10 @@ h1, .brand {
 
     .social-links {
         justify-content: flex-start;
+    }
+
+    .page-grid {
+        padding: 3rem 1.25rem 3.5rem;
+        gap: 2rem;
     }
 }
