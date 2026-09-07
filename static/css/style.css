@@ -482,3 +482,12 @@ h1, .brand {
     }
 
 }
+
+body {
+    background-color: var(--paper);
+}
+
+/* Dark mode sekarang tidak hanya mengubah variabel di .site-wrapper */
+#theme-toggle:checked ~ .site-wrapper {
+    --paper: #181614;
+}
