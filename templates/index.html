@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Adriel - Portfolio</title>
+    <title>{{ name }} - Portfolio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
@@ -12,18 +12,19 @@
 <body>
     <input type="checkbox" id="theme-toggle" class="theme-toggle-input">
     <div class="site-wrapper">
-    <header class="site-header">
+        <header class="site-header">
         <div class="container">
-            <a href="#profile" class="brand">Adriel</a>
+            <a href="{% url 'main:show_main' %}" class="brand">{{ name }}</a>
             <nav>
-                <a href="#profile">Profile</a>
-                <a href="#skills">Skills</a>
-                <label for="theme-toggle" class="theme-toggle-label">
-                    <span class="theme-icon theme-icon--light">☀</span>
-                    <span class="theme-icon theme-icon--dark">☾</span>
-                    <span class="theme-toggle-text">Theme</span>
-                </label>
-            </nav>
+    <a href="{% url 'main:show_main' %}">Profile</a>
+    <a href="{% url 'main:show_experience' %}">Experience</a>
+
+    <label for="theme-toggle" class="theme-toggle-label">
+        <span class="theme-icon theme-icon--light">☀</span>
+        <span class="theme-icon theme-icon--dark">☾</span>
+        <span class="theme-toggle-text">Theme</span>
+    </label>
+</nav>
         </div>
     </header>
 
@@ -33,22 +34,22 @@
                 <div class="hero-grid">
                     <div class="hero-identity">
                         <p class="hero-kicker">Sistem Informasi &middot; Universitas Indonesia</p>
-                        <h1>Adriel Raynard Davis Sihotang</h1>
+                        <h1>{{ name }}</h1>
                     </div>
                     <div class="hero-photo">
                         <div class="photo-block"></div>
-                        <img class="avatar" src="/static/img/fotoAdriel.png" alt="Photo of Adriel">
+                        <img class="avatar" src="/static/img/fotoAdriel.png" alt="Photo of {{ name }}">
                     </div>
                     <div class="hero-details">
-                        <p class="bio">Aku adalah mahasiswa tahun kedua di fakultas ilmu komputer Universitas Indonesia. Aku tinggal di Bintaro.</p>
+                        <p class="bio">{{ bio }}</p>
                         <dl class="meta-list">
                             <div class="meta-row">
                                 <dt>NPM</dt>
-                                <dd>2506587150</dd>
+                                <dd>{{ npm }}</dd>
                             </div>
                             <div class="meta-row">
                                 <dt>Program</dt>
-                                <dd>S1 Sistem Informasi</dd>
+                                <dd>{{ study_program }}</dd>
                             </div>
                         </dl>
                         <div class="social-links">
@@ -60,7 +61,7 @@
                 </div>
             </section>
 
-            <aside class="skills" id="skills">
+            <section class="skills" id="skills">
                 <h2 class="skills-title">Skills</h2>
                 <ul class="skills-list">
                     <li class="skill-item">
@@ -92,13 +93,13 @@
                         </div>
                     </li>
                 </ul>
-            </aside>
+            </section>
         </div>
     </main>
 
     <footer class="site-footer">
         <div class="container">
-            <p>&copy; 2026 Adriel. Fakultas Ilmu Komputer, Universitas Indonesia.</p>
+            <p>&copy; 2026 {{ name }}. Fakultas Ilmu Komputer, Universitas Indonesia.</p>
         </div>
     </footer>
     </div>
