@@ -38,20 +38,20 @@
                     <div class="education-timeline">
                         {% for education in education_list %}
                             <article class="education-card">
-                                <span class="education-level">
-                                    {{ education.get_level_display }}
+                                <span class="education-tingkat">
+                                    {{ education.get_tingkat_display }}
                                 </span>
-                                <h2>{{ education.institution_name }}</h2>
+                                <h2>{{ education.nama_sekolah }}</h2>
 
-                                {% if education.major %}
-                                    <p class="education-major">{{ education.major }}</p>
+                                {% if education.jurusan %}
+                                    <p class="education-jurusan">{{ education.jurusan }}</p>
                                 {% endif %}
 
                                 <p class="education-period">{{ education.period_display }}</p>
 
-                                {% if education.description %}
-                                    <p class="education-description">
-                                        {{ education.description }}
+                                {% if education.deskripsi %}
+                                    <p class="education-deskripsi">
+                                        {{ education.deskripsi }}
                                     </p>
                                 {% endif %}
 
