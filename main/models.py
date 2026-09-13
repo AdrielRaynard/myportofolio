@@ -1,7 +1,6 @@
 from django.db import models
 
 import uuid
-from django.db import models
 
 class Experience(models.Model):
     EXPERIENCE_CHOICES = [
@@ -27,18 +26,18 @@ class Experience(models.Model):
     def is_ongoing(self):
         return self.ended_at is None
 
-class RiwayatPendidikan(models.Model):
+class Education(models.Model):
     LEVEL_CHOICES = [
         ('smp', 'SMP'),
         ('sma', 'SMA/SMK'),
-        ('s1', 'S1 (Sarjana)'),
-        ('s2', 'S2 (Magister)'),
-        ('s3', 'S3 (Doktor)'),
+        ('S1', 'S1 (Sarjana)'),
+        ('S2', 'S2 (Magister)'),
+        ('S3', 'S3 (Doktor)'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     nama_sekolah = models.CharField(max_length=255)
-    tingkat = models.CharField(max_length=10, choices=LEVEL_CHOICES, default='s1')
+    tingkat = models.CharField(max_length=10, choices=LEVEL_CHOICES, default='S1')
     jurusan = models.CharField(max_length=255, blank=True, null=True)
     tahun_masuk = models.PositiveIntegerField()
     tahun_lulus = models.PositiveIntegerField(blank=True, null=True)
