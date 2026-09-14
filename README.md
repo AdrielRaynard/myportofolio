@@ -210,3 +210,128 @@ Dark Mode.
 AI digunakan sebagai bantuan dalam memahami konsep, memberikan saran perbaikan
 kode, dan membantu proses debugging. Implementasi akhir tetap saya sesuaikan
 dengan kebutuhan project dan saya terapkan pada kode project saya sendiri.
+
+
+### Tugas 2
+
+## Deskripsi Proyek
+
+Proyek ini merupakan aplikasi web portofolio pribadi yang dibangun menggunakan framework Django dengan menerapkan arsitektur Model-View-Template (MVT). Aplikasi ini dirancang secara khusus untuk menampilkan daftar riwayat pendidikan (education) secara dinamis yang diambil langsung dari database.
+
+Melalui aplikasi ini, pengguna dapat melihat berbagai informasi riwayat pendidikan, seperti nama instansi/lembaga pendidikan, tingkat pendidikan, periode tahun studi, jurusan/program studi, serta deskripsi atau pencapaian terkait yang dikelola secara terpusat melalui backend Django.
+
+## Instruksi Setup 
+
+Ikuti langkah-langkah berikut untuk menjalankan proyek ini di lingkungan lokal Anda:
+
+1. Prasyarat
+Pastikan Anda telah menginstal Python 3.x dan Git di komputer Anda.
+
+2. Kloning Repositori & Masuk ke Direktori
+Bash
+git clone <URL_REPOSITORI_ANDA>
+cd <NAMA_FOLDER_PROYEK>
+
+3. Membuat dan Mengaktifkan Virtual Environment
+Windows:
+Bash
+python -m venv venv
+venv\Scripts\activate
+
+macOS / Linux:
+Bash
+python3 -m venv venv
+source venv/bin/activate
+
+4. Menginstal Dependencies
+Bash
+pip install -r requirements.txt
+(Catatan: Jika berkas requirements.txt belum ada, Anda dapat menginstal Django secara langsung menggunakan perintah pip install django)
+
+5. Melakukan Migrasi Database
+Bash
+python manage.py makemigrations
+python manage.py migrate
+
+6. Menjalankan Server Lokal
+Bash
+python manage.py runserver
+
+7. Mengakses Aplikasi
+Buka browser Anda dan akses alamat berikut:
+http://localhost:8000/
+
+## Pertanyaan Reflektif
+
+### 1. Jelaskan alur yang terjadi ketika pengguna membuka halaman portofolio baru, mulai dari permintaan yang diterima proyek hingga data ditampilkan pada browser. Dalam jawabanmu, jelaskan peran urls.py proyek, urls.py aplikasi, view, model, dan template.
+
+Browser mengirimkan HTTP Request: Pengguna mengakses URL riwayat pendidikan (misalnya /education/), kemudian browser mengirimkan permintaan tersebut ke server Django.
+
+Pengecekan di urls.py Proyek (Root): Server mengarahkan permintaan ke berkas konfigurasi URL utama. Berkas ini menggunakan fungsi include() untuk meneruskan rute ke aplikasi yang spesifik.
+
+Pencocokan di urls.py Aplikasi: Django mencari pola URL yang cocok (misal 'education/') dan menemukan fungsi atau kelas View yang ditugaskan untuk menangani rute tersebut.
+
+Pemrosesan oleh View (views.py): View bertindak sebagai pusat kendali. View menerima request tersebut dan menjalankan logika bisnis, termasuk meminta data riwayat pendidikan ke Model.
+
+Pengambilan Data oleh Model (models.py): Jika interface membutuhkan data dinamis, View akan memanggil Model. Model kemudian mengambil data riwayat pendidikan dari database menggunakan Django ORM dan mengembalikannya ke View dalam bentuk QuerySet.
+
+Rendering Template (.html): View menyusun data dari Model ke dalam objek context, lalu menggabungkannya dengan berkas Template. Template memproses tag DTL (Django Template Language) untuk menyisipkan data dinamis ke dalam kerangka HTML.
+
+Pengembalian HTTP Response: View mengemas kode HTML yang sudah final menjadi HTTP Response dan mengirimkannya kembali ke browser pengguna untuk dirender menjadi halaman web visual.
+
+### 2. Mengapa data untuk bagian portofolio baru sebaiknya disimpan pada model dan tidak ditulis langsung di dalam template? Jelaskan dampaknya terhadap kemudahan pemeliharaan dan pengembangan aplikasi.
+
+Pusat Pengelolaan Data Terpusat: Penambahan, pembaruan, atau penghapusan data portofolio dapat dilakukan dengan mudah melalui interface Django Admin tanpa perlu mengedit berkas HTML satu per satu.
+
+Mencegah Kerusakan Tampilan: Mengedit berkas HTML secara manual berisiko merusak struktur, CSS, atau tata letak (layout). Pemisahan data dan tampilan menjaga integritas kode interface.
+
+Kemudahan Ekspansi (Scalability): Data di Model dapat dengan mudah diurutkan, disaring berdasarkan kategori, atau dipaginasi menggunakan fitur bawaan Django ORM. Hal ini sangat sulit atau mustahil dilakukan secara efisien jika data di-hardcode.
+
+Penggunaan Kembali Data (Reusability): Data yang sama dapat ditampilkan di berbagai bagian situs (misalnya ringkasan di beranda dan rincian di halaman detail) tanpa harus menulis ulang kontennya.
+
+### 3. Apa perbedaan fungsi makemigrations dan migrate pada Django? Berikan contoh perubahan model yang mengharuskanmu menjalankan kedua perintah tersebut.
+
+Perintah: python manage.py makemigrations
+
+Fungsi Utama: Berfungsi memindai perubahan yang saya tulis di dalam berkas models.py dan membuat skema/rencana perubahan (blueprint).
+
+Output: Menghasilkan berkas Python baru di dalam folder migrations/ (misalnya 0002_education.py).
+
+Status Database: Pada tahap ini, struktur tabel di dalam database fisik belum berubah sama sekali.
+
+Perintah: python manage.py migrate
+
+Fungsi Utama: Berfungsi membaca skrip migrasi yang telah dibuat dan menerapkannya langsung ke dalam sistem database.
+
+Output: Mengeksekusi perintah SQL (seperti CREATE TABLE atau ALTER TABLE) ke dalam database (misalnya db.sqlite3).
+
+Status Database: Struktur tabel pada database fisik telah resmi berubah dan siap menyimpan data.
+
+Contoh Siklus Penggunaan:
+Saat saya menambahkan kelas Education baru di models.py, saya pertama-tama menjalankan python manage.py makemigrations untuk membuat riwayat rancangannya. Setelah berkas rancangan muncul, saya menjalankan python manage.py migrate agar Django benar-benar membuatkan tabel main_education di dalam database SQL saya.
+
+## Fitur Tambahan
+
+Untuk memenuhi nilai skala 4 pada rubrik penilaian Fungsionalitas % Kesesuaian Topik, saya menambahkan fitur tambahan sebagai berikut:
+
+Saya menambahkan fitur untuk mengunduh ringkasan portofolio (bagian Experience dan Education) secara langsung dalam format PDF dari website, tanpa perlu screenshot atau print manual dari browser.
+
+Fitur ini bekerja sepenuhnya di sisi server (server-side rendering). Ketika pengguna mengklik tautan "Download PDF" pada navbar, request akan diarahkan ke view baru download_portfolio_pdf di main/views.py. View ini mengambil seluruh data Experience dan Education dari database, lalu merender data tersebut ke dalam template HTML khusus (templates/portfolio_pdf.html) yang berbeda dari template halaman biasa dan dirancang khusus agar sesuai dengan kemampuan rendering PDF. Hasil render HTML tersebut kemudian dikonversi menjadi berkas PDF menggunakan library xhtml2pdf, dan dikirim kembali sebagai HttpResponse dengan header Content-Disposition: attachment, sehingga browser langsung mengunduh file portfolio-adriel.pdf alih-alih menampilkannya di layar.
+
+Untuk menambahkan fitur ini, langkah-langkah yang saya lakukan meliputi:
+
+Menambahkan library xhtml2pdf ke requirements.txt dan menginstalnya melalui pip install xhtml2pdf.
+Membuat view baru download_portfolio_pdf yang mengambil data dari model Experience dan Education, merendernya ke string HTML menggunakan render_to_string, lalu mengonversinya menjadi PDF melalui pisa.pisaDocument.
+Membuat template baru templates/portfolio_pdf.html dengan CSS yang ditulis inline (bukan file eksternal), karena xhtml2pdf tidak dapat memuat berkas CSS dari luar template.
+Mendaftarkan route baru portfolio/pdf/ dengan nama main:download_portfolio_pdf pada main/urls.py.
+Menambahkan tautan "Download PDF" pada navbar di seluruh halaman (index.html, experience.html, education.html) menggunakan tag {% url %} agar konsisten dan tidak melakukan hardcoded URL.
+Menambahkan unit test baru (PortfolioPdfTest) untuk memastikan endpoint dapat diakses dan mengembalikan berkas PDF yang valid, tetap berfungsi ketika data kosong, dan tautan download tersedia di seluruh halaman navbar.
+
+Dengan fitur ini, calon perekrut atau siapa pun yang mengunjungi portofolio dapat langsung mengunduh ringkasan riwayat pendidikan dan pengalaman saya dalam satu berkas PDF, tanpa harus membuka setiap halaman satu per satu.
+
+## AI Disclosure
+Dalam pengerjaan tugas ini, saya menggunakan Claude AI sebagai alat bantu untuk berdiskusi dan memperoleh masukan mengenai pengembangan backend berbasis Django. Bantuan ini khususnya terkait pemahaman arsitektur Model-View-Template (MVT), alur request-response HTTP, manajemen migrasi database, dan logika implementasi fitur tambahan pengunduhan PDF.
+
+AI digunakan sebagai bantuan dalam memahami konsep, memberikan saran perbaikan
+kode, dan membantu proses debugging. Implementasi akhir tetap saya sesuaikan
+dengan kebutuhan project dan saya terapkan pada kode project saya sendiri.
