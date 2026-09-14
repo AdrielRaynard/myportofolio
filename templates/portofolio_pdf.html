@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Portfolio - {{ name }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2.2cm 1.8cm;
+        }
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            color: #1a1a1a;
+            font-size: 11pt;
+            line-height: 1.5;
+        }
+        h1 {
+            font-size: 22pt;
+            margin-bottom: 2px;
+            color: #111111;
+        }
+        .subtitle {
+            color: #555555;
+            font-size: 10pt;
+            margin-bottom: 22px;
+        }
+        h2.section-title {
+            font-size: 14pt;
+            color: #111111;
+            border-bottom: 1.5px solid #111111;
+            padding-bottom: 4px;
+            margin-top: 26px;
+            margin-bottom: 12px;
+        }
+        table.item-table {
+            width: 100%;
+            margin-bottom: 14px;
+        }
+        table.item-table td {
+            vertical-align: top;
+            padding-bottom: 10px;
+        }
+        .item-title {
+            font-size: 12pt;
+            font-weight: bold;
+            color: #111111;
+        }
+        .item-tag {
+            display: inline-block;
+            font-size: 8.5pt;
+            color: #444444;
+            border: 0.75px solid #999999;
+            padding: 1px 6px;
+            margin-bottom: 4px;
+        }
+        .item-meta {
+            font-size: 9.5pt;
+            color: #555555;
+            margin-top: 2px;
+        }
+        .item-description {
+            font-size: 10pt;
+            color: #222222;
+            margin-top: 4px;
+        }
+        .empty-state {
+            font-size: 10pt;
+            color: #777777;
+            font-style: italic;
+        }
+        .divider {
+            border-top: 0.75px solid #dddddd;
+        }
+    </style>
+</head>
+<body>
+    <h1>{{ name }}</h1>
+    <p class="subtitle">Ringkasan Portofolio &mdash; Experience &amp; Education</p>
+
+    <h2 class="section-title">Experience</h2>
+    <table class="item-table">
+        {% for experience in experience_list %}
+            <tr class="divider">
+                <td>
+                    <div class="item-tag">{{ experience.get_category_display }}</div><br/>
+                    <span class="item-title">{{ experience.title }}</span>
+                    <div class="item-meta">
+                        {% if experience.is_ongoing %}Sedang berlangsung{% else %}Selesai{% endif %}
+                    </div>
+                    <div class="item-description">{{ experience.description }}</div>
+                </td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td><p class="empty-state">Belum ada pengalaman yang ditambahkan.</p></td>
+            </tr>
+        {% endfor %}
+    </table>
+
+    <h2 class="section-title">Education</h2>
+    <table class="item-table">
+        {% for education in education_list %}
+            <tr class="divider">
+                <td>
+                    <div class="item-tag">{{ education.get_tingkat_display }}</div><br/>
+                    <span class="item-title">{{ education.nama_sekolah }}</span>
+                    {% if education.jurusan %}
+                        <div class="item-meta">{{ education.jurusan }}</div>
+                    {% endif %}
+                    <div class="item-meta">
+                        {{ education.period_display }} &middot;
+                        {% if education.is_ongoing %}Sedang berlangsung{% else %}Selesai{% endif %}
+                    </div>
+                    {% if education.deskripsi %}
+                        <div class="item-description">{{ education.deskripsi }}</div>
+                    {% endif %}
+                </td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td><p class="empty-state">Belum ada riwayat pendidikan yang ditambahkan.</p></td>
+            </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
