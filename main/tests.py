@@ -115,4 +115,44 @@ class EducationTest(TestCase):
 
         self.assertContains(main_response, f'href="{education_url}"')
         self.assertContains(experience_response, f'href="{education_url}"')
+        
 
+class PortfolioPdfTest(TestCase):
+    def setUp(self):
+        self.experience = Experience.objects.create(
+            title="Contoh Pengalaman untuk PDF",
+            description="Deskripsi pengalaman untuk keperluan testing PDF.",
+            category="internship",
+        )
+        self.education = Education.objects.create(
+            nama_sekolah="Universitas Contoh PDF",
+            tingkat="S1",
+            jurusan="Sistem Informasi",
+            tahun_masuk=2023,
+        )
+
+    def test_download_pdf_url_is_accessible_and_returns_pdf(self):
+        response = self.client.get(reverse("main:download_portfolio_pdf"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn("attachment", response["Content-Disposition"])
+        self.assertIn("portfolio-adriel.pdf", response["Content-Disposition"])
+
+    def test_download_pdf_works_when_data_is_empty(self):
+        Experience.objects.all().delete()
+        Education.objects.all().delete()
+        response = self.client.get(reverse("main:download_portfolio_pdf"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+
+    def test_navbar_has_download_pdf_link(self):
+        pdf_url = reverse("main:download_portfolio_pdf")
+        main_response = self.client.get(reverse("main:show_main"))
+        experience_response = self.client.get(reverse("main:show_experience"))
+        education_response = self.client.get(reverse("main:show_education"))
+
+        self.assertContains(main_response, f'href="{pdf_url}"')
+        self.assertContains(experience_response, f'href="{pdf_url}"')
+        self.assertContains(education_response, f'href="{pdf_url}"')

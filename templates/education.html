@@ -1,82 +1,89 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+{% extends "base.html" %}
+
+{% block meta %}
     <title>Education - {{ name }}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
-    <input type="checkbox" id="theme-toggle" class="theme-toggle-input">
-    <div class="site-wrapper">
-        <header class="site-header">
+{% endblock meta %}
+
+{% block content %}
+    <main>
+        <section class="education-section" id="education">
             <div class="container">
-                <a href="{% url 'main:show_main' %}" class="brand">{{ name }}</a>
-                <nav>
-                    <a href="{% url 'main:show_main' %}">Profile</a>
-                    <a href="{% url 'main:show_experience' %}">Experience</a>
-                    <a href="{% url 'main:show_education' %}">Education</a>
-                    <a href="{% url 'main:download_portfolio_pdf' %}">Download PDF</a>
+                <p class="section-kicker">Riwayat akademik saya</p>
 
-                    <label for="theme-toggle" class="theme-toggle-label">
-                        <span class="theme-icon theme-icon--light">☀</span>
-                        <span class="theme-icon theme-icon--dark">☾</span>
-                        <span class="theme-toggle-text">Theme</span>
-                    </label>
-                </nav>
-            </div>
-        </header>
-
-        <main>
-            <section class="education-section" id="education">
-                <div class="container">
-                    <p class="section-kicker">Riwayat akademik saya</p>
+                <div class="education-header">
                     <h1>Education</h1>
 
-                    <div class="education-timeline">
-                        {% for education in education_list %}
-                            <article class="education-card">
-                                <span class="education-tingkat">
-                                    {{ education.get_tingkat_display }}
-                                </span>
-                                <h2>{{ education.nama_sekolah }}</h2>
+                    <a href="{% url 'main:create_education' %}"
+                       class="button education-add-button">
+                        <span aria-hidden="true">+</span>
+                        Tambah Pendidikan
+                    </a>
+                </div>
 
-                                {% if education.jurusan %}
-                                    <p class="education-jurusan">{{ education.jurusan }}</p>
-                                {% endif %}
+                <form method="get"
+                      action="{% url 'main:show_education' %}"
+                      class="education-search">
+                    <input type="search"
+                           name="nama_sekolah"
+                           value="{{ nama_sekolah_query }}"
+                           placeholder="Cari berdasarkan nama sekolah"
+                           class="education-search__input"
+                           aria-label="Cari berdasarkan nama sekolah">
 
-                                <p class="education-period">{{ education.period_display }}</p>
+                    <button type="submit" class="button">
+                        Cari
+                    </button>
+                </form>
 
-                                {% if education.deskripsi %}
-                                    <p class="education-deskripsi">
-                                        {{ education.deskripsi }}
-                                    </p>
-                                {% endif %}
+                <div class="education-grid">
+                    {% for education in education_list %}
+                        <article class="education-card">
+                            <h2>{{ education.nama_sekolah }}</h2>
 
-                                {% if education.is_ongoing %}
-                                    <p class="education-status">Sedang berlangsung</p>
-                                {% else %}
-                                    <p class="education-status">Selesai</p>
-                                {% endif %}
-                            </article>
-                        {% empty %}
+                            <span class="education-tingkat">
+                                {{ education.get_tingkat_display }}
+                            </span>
+
+                            {% if education.jurusan %}
+                                <p class="education-jurusan">
+                                    {{ education.jurusan }}
+                                </p>
+                            {% endif %}
+
+                            <p class="education-period">
+                                {{ education.period_display }}
+                            </p>
+
+                            {% if education.deskripsi %}
+                                <p class="education-deskripsi">
+                                    {{ education.deskripsi }}
+                                </p>
+                            {% endif %}
+
+                            {% if education.is_ongoing %}
+                                <p class="education-status">
+                                    Sedang berlangsung
+                                </p>
+                            {% else %}
+                                <p class="education-status">
+                                    Selesai
+                                </p>
+                            {% endif %}
+
+                        </article>
+                    {% empty %}
+                        {% if nama_sekolah_query %}
+                            <p class="empty-state">
+                                Tidak ada pendidikan dengan nama tersebut.
+                            </p>
+                        {% else %}
                             <p class="empty-state">
                                 Belum ada riwayat pendidikan yang ditambahkan.
                             </p>
-                        {% endfor %}
-                    </div>
+                        {% endif %}
+                    {% endfor %}
                 </div>
-            </section>
-        </main>
-
-        <footer class="site-footer">
-            <div class="container">
-                <p>&copy; 2026 {{ name }}. Fakultas Ilmu Komputer, Universitas Indonesia.</p>
             </div>
-        </footer>
-    </div>
-</body>
-</html>
+        </section>
+    </main>
+{% endblock content %}
