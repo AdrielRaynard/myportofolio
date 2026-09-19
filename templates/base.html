@@ -4,36 +4,45 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}{{ name }} - Portfolio{% endblock title %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css">
-    {% block meta %} {% endblock meta %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    {% block meta %}{% endblock meta %}
 </head>
 <body>
-    <header class="site-header">
-        <div class="container">
-            <a href="{% url 'main:show_main' %}" class="brand">{{ name }}</a>
-            <nav>
-    <a href="{% url 'main:show_main' %}">Profile</a>
-    <a href="{% url 'main:show_experience' %}">Experience</a>
-    <a href="{% url 'main:show_education' %}">Education</a>
-    <a href="{% url 'main:download_portfolio_pdf' %}">Download PDF</a>
+    {# Dark mode memakai CSS checkbox hack: checkbox ini WAJIB berada tepat sebelum .site-wrapper (sibling). #}
+    <input type="checkbox" id="theme-toggle" class="theme-toggle-input">
 
-    <label for="theme-toggle" class="theme-toggle-label">
-        <span class="theme-icon theme-icon--light">☀</span>
-        <span class="theme-icon theme-icon--dark">☾</span>
-        <span class="theme-toggle-text">Theme</span>
-    </label>
-</nav>
-        </div>
-    </header>
-    {% block content %} {% endblock %}
+        <div class="site-wrapper">
+        <header class="site-header">
+            <div class="container">
+                <a href="{% url 'main:show_main' %}" class="brand">{{ name }}</a>
+                <nav>
+                    <a href="{% url 'main:show_main' %}">Profile</a>
+                    <a href="{% url 'main:show_experience' %}">Experience</a>
+                    <a href="{% url 'main:show_education' %}">Education</a>
+                    <a href="{% url 'main:download_portfolio_pdf' %}">Download PDF</a>
 
-    <footer class="site-footer">
-        <div class="container">
-            <p>&copy; 2026 {{ name }}. Fakultas Ilmu Komputer, Universitas Indonesia.</p>
-        </div>
-    </footer>
+                        <label for="theme-toggle" class="theme-toggle-label">
+                        <span class="theme-icon theme-icon--light">☀</span>
+                        <span class="theme-icon theme-icon--dark">☾</span>
+                        <span class="theme-toggle-text">Theme</span>
+                    </label>
+                </nav>
+            </div>
+        </header>
+
+        {% include "components/messages.html" %}
+
+        {% block content %}{% endblock content %}
+
+        <footer class="site-footer">
+            <div class="container">
+                <p>&copy; 2026 {{ name }}. Fakultas Ilmu Komputer, Universitas Indonesia.</p>
+            </div>
+        </footer>
+    </div>
 </body>
 </html>

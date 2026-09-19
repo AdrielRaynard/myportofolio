@@ -16,6 +16,7 @@
     --surface: #f1e8d9;
     --surface-deep: #e9dcc4;
     --desc-bg: rgba(28, 25, 23, 0.04);
+    --card-bg: #fff;
 }
 
 body {
@@ -498,7 +499,7 @@ body {
 
 .experience-card {
     padding: 1.25rem;
-    background-color: #fff;
+    background-color: var(--card-bg);
     border: 1px solid var(--line);
     border-radius: var(--radius);
 }
@@ -624,6 +625,8 @@ body {
     padding: 0.7rem;
     border: 1px solid var(--accent);
     border-radius: var(--radius);
+    background: var(--card-bg);
+    color: var(--ink);
     font: inherit;
     transition:
         border-color 0.2s ease,
@@ -659,6 +662,7 @@ body {
 
 .button-secondary {
     background: var(--ink);
+    color: var(--paper);
 }
 
 /* education actions and search */
@@ -710,7 +714,7 @@ body {
     padding: 0.7rem;
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    background: #fff;
+    background: var(--card-bg);
     color: var(--ink);
     font: inherit;
 }
@@ -844,4 +848,37 @@ body {
         width: 100%;
         text-align: center;
     }
+}
+
+/* flash messages (django.contrib.messages) */
+
+.messages {
+    display: grid;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+}
+
+.message {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--line);
+    border-left-width: 4px;
+    border-radius: var(--radius);
+    background: var(--card-bg);
+    font-weight: 600;
+}
+
+.message--success {
+    border-left-color: #2e7d32;
+}
+
+.message--error {
+    border-left-color: #b42318;
+}
+
+.message--warning {
+    border-left-color: #b26a00;
+}
+
+.message--info {
+    border-left-color: var(--accent);
 }

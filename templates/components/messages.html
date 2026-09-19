@@ -1,0 +1,8 @@
+{# Menampilkan flash message dari django.contrib.messages (mis. "Pengalaman berhasil ditambahkan!"). #}
+{% if messages %}
+    <div class="container messages" role="status" aria-live="polite">
+        {% for message in messages %}
+            <p class="message message--{{ message.tags }}">{{ message }}</p>
+        {% endfor %}
+    </div>
+{% endif %}

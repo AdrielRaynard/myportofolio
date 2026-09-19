@@ -1,7 +1,9 @@
-from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
-
+from django.contrib.messages import constants as message_levels
+from django.contrib.messages.storage.base import Message
+from django.template.loader import render_to_string
+from django.test import TestCase, override_settings
 from main.models import Experience, Education
 
 
@@ -156,3 +158,85 @@ class PortfolioPdfTest(TestCase):
         self.assertContains(main_response, f'href="{pdf_url}"')
         self.assertContains(experience_response, f'href="{pdf_url}"')
         self.assertContains(education_response, f'href="{pdf_url}"')
+
+
+class BaseTemplateInheritanceTest(TestCase):
+    """Semua halaman HTML yang strukturnya identik harus memakai base.html."""
+
+    PAGE_URL_NAMES = [
+        "main:show_main",
+        "main:show_experience",
+        "main:show_education",
+        "main:create_education",
+    ]
+
+    def test_every_page_extends_base_template(self):
+        for url_name in self.PAGE_URL_NAMES:
+            with self.subTest(page=url_name):
+                response = self.client.get(reverse(url_name))
+
+                self.assertEqual(response.status_code, 200)
+                self.assertTemplateUsed(response, "base.html")
+
+    def test_every_page_has_exactly_one_document_skeleton(self):
+        """Tidak boleh ada skeleton HTML ganda (sisa copy-paste sebelum refactor)."""
+        for url_name in self.PAGE_URL_NAMES:
+            with self.subTest(page=url_name):
+                html = self.client.get(reverse(url_name)).content.decode()
+
+                self.assertEqual(html.count("<html"), 1)
+                self.assertEqual(html.count("<title>"), 1)
+                self.assertEqual(html.count('class="site-header"'), 1)
+                self.assertEqual(html.count('class="site-footer"'), 1)
+
+    def test_theme_toggle_checkbox_precedes_site_wrapper_on_every_page(self):
+        """CSS checkbox hack: checkbox harus ada dan berada SEBELUM .site-wrapper."""
+        for url_name in self.PAGE_URL_NAMES:
+            with self.subTest(page=url_name):
+                html = self.client.get(reverse(url_name)).content.decode()
+
+                self.assertEqual(html.count('id="theme-toggle"'), 1)
+                self.assertEqual(html.count('class="site-wrapper"'), 1)
+                self.assertLess(
+                    html.index('id="theme-toggle"'),
+                    html.index('class="site-wrapper"'),
+                )
+
+    def test_pdf_template_is_intentionally_standalone(self):
+        """Template PDF punya struktur berbeda, jadi tidak boleh membawa navbar/tema web."""
+        html = render_to_string("portfolio_pdf.html", {"name": "Adriel"})
+
+        self.assertNotIn("theme-toggle", html)
+        self.assertNotIn("site-header", html)
+
+
+class FlashMessageTest(TestCase):
+    def test_messages_component_renders_level_class(self):
+        html = render_to_string(
+            "components/messages.html",
+            {"messages": [Message(message_levels.SUCCESS, "Data tersimpan!")]},
+        )
+
+        self.assertIn("Data tersimpan!", html)
+        self.assertIn("message--success", html)
+
+    def test_messages_component_renders_nothing_without_messages(self):
+        html = render_to_string("components/messages.html", {"messages": []})
+
+        self.assertNotIn("message", html)
+
+    @override_settings(PORTFOLIO_SECRET="rahasia-test")
+    def test_success_message_is_displayed_after_redirect(self):
+        response = self.client.post(
+            reverse("main:create_education"),
+            {
+                "nama_sekolah": "Sekolah Uji Flash",
+                "tingkat": "S1",
+                "tahun_masuk": 2020,
+                "secret": "rahasia-test",
+            },
+            follow=True,
+        )
+
+        self.assertContains(response, "Pendidikan baru berhasil ditambahkan!")
+        self.assertContains(response, "message--success")
