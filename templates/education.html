@@ -20,12 +20,12 @@
 
                 <form method="get"
                       action="{% url 'main:show_education' %}"
-                      class="education-search">
+                      class="search-form">
                     <input type="search"
                            name="nama_sekolah"
                            value="{{ nama_sekolah_query }}"
                            placeholder="Cari berdasarkan nama sekolah"
-                           class="education-search__input"
+                           class="search-form__input"
                            aria-label="Cari berdasarkan nama sekolah">
 
                     <button type="submit" class="button">

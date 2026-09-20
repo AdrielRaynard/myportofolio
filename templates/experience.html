@@ -9,9 +9,28 @@
                 <p class="section-kicker">Perjalanan saya sejauh ini</p>
                 <h1>Experience</h1>
 
+                <form method="get"
+                      action="{% url 'main:show_experience' %}"
+                      class="search-form">
+                    <input type="search"
+                           name="title"
+                           value="{{ title_query }}"
+                           placeholder="Cari berdasarkan judul pengalaman"
+                           class="search-form__input"
+                           aria-label="Cari berdasarkan judul pengalaman">
+
+                    <button type="submit" class="button">Cari</button>
+                </form>
+
                             <div class="experience-grid">
                     {% for experience in experience_list %}
                         <article class="experience-card">
+                                                        {% if experience.thumbnail %}
+                                <img src="{{ experience.thumbnail }}"
+                                     alt="Gambar {{ experience.title }}"
+                                     class="experience-thumbnail"
+                                     loading="lazy">
+                            {% endif %}
                             <span class="experience-category">
                                 {{ experience.get_category_display }}
                             </span>
@@ -21,17 +40,23 @@
                             </p>
 
                         {% if experience.is_ongoing %}
-+                                <p class="experience-status">Sedang berlangsung</p>
-+                            {% else %}
-+                                <p class="experience-status">Selesai</p>
-+                            {% endif %}
-+                        </article>
-+                    {% empty %}
-+                        <p class="empty-state">
-+                            Belum ada pengalaman yang ditambahkan.
-+                        </p>
-+                    {% endfor %}
-+                </div>
+                                <p class="experience-status">Sedang berlangsung</p>
+                            {% else %}
+                                <p class="experience-status">Selesai</p>
+                            {% endif %}
+                        </article>
+                    {% empty %}
+                                                {% if title_query %}
+                            <p class="empty-state">
+                                Tidak ada pengalaman dengan judul tersebut.
+                            </p>
+                        {% else %}
+                            <p class="empty-state">
+                                Belum ada pengalaman yang ditambahkan.
+                            </p>
+                        {% endif %}
+                    {% endfor %}
+                </div>
             </div>
                 </section>
     </main>

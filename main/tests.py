@@ -1,10 +1,16 @@
+import json
+from unittest import mock
+
 from django.urls import reverse
 from django.utils import timezone
 from django.contrib.messages import constants as message_levels
 from django.contrib.messages.storage.base import Message
+from django.core import serializers
+from django.http import HttpResponse
 from django.template.loader import render_to_string
 from django.test import TestCase, override_settings
 from main.models import Experience, Education
+
 
 
 class MainTest(TestCase):
@@ -40,7 +46,7 @@ class MainTest(TestCase):
         self.assertTemplateUsed(response, "experience.html")
         self.assertContains(response, self.experience.title)
         self.assertContains(response, self.experience.description)
-        self.assertContains(response, "kepanitiaan")
+        self.assertContains(response, "Kepanitiaan")
         self.assertContains(response, "Sedang berlangsung")
         self.assertContains(response, f'href="{reverse("main:show_main")}"')
 
@@ -240,3 +246,148 @@ class FlashMessageTest(TestCase):
 
         self.assertContains(response, "Pendidikan baru berhasil ditambahkan!")
         self.assertContains(response, "message--success")
+
+class ExperienceJsonTest(TestCase):
+    """JSON Data Delivery untuk Experience + halaman yang mengonsumsinya."""
+
+    def setUp(self):
+        Experience.objects.all().delete()
+        self.older = Experience.objects.create(
+            title="Asisten Dosen Dasar-Dasar Pemrograman",
+            description="Membimbing mahasiswa baru belajar Python.",
+            category="volunteer",
+        )
+        self.newer = Experience.objects.create(
+            title="Magang Backend Developer",
+            description="Membangun REST API dengan Django.",
+            category="internship",
+            thumbnail="https://example.com/magang.png",
+        )
+
+    def get_json(self, url_name, *args, **params):
+        response = self.client.get(reverse(url_name, args=args), params)
+        return response, json.loads(response.content)
+
+    def test_list_endpoint_returns_json_with_serialized_fields(self):
+        response, data = self.get_json("main:get_experience_json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/json")
+        self.assertEqual(len(data), 2)
+        for item in data:
+            self.assertEqual(item["model"], "main.experience")
+            self.assertEqual(
+                set(item["fields"]),
+                {"title", "description", "category", "thumbnail", "started_at", "ended_at"},
+            )
+
+    def test_list_is_ordered_newest_first(self):
+        _, data = self.get_json("main:get_experience_json")
+
+        self.assertEqual([item["pk"] for item in data], [str(self.newer.pk), str(self.older.pk)])
+
+    def test_list_can_be_filtered_by_title_case_insensitively(self):
+        _, data = self.get_json("main:get_experience_json", title="  backend ")
+
+        self.assertEqual([item["pk"] for item in data], [str(self.newer.pk)])
+
+    def test_filter_without_match_returns_empty_list(self):
+        _, data = self.get_json("main:get_experience_json", title="tidak-ada")
+
+        self.assertEqual(data, [])
+
+    def test_detail_endpoint_returns_single_experience(self):
+        response, data = self.get_json("main:get_experience_detail_json", self.newer.pk)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["fields"]["title"], "Magang Backend Developer")
+
+    def test_detail_endpoint_returns_json_404_for_unknown_id(self):
+        response, data = self.get_json(
+            "main:get_experience_detail_json", "00000000-0000-0000-0000-000000000000"
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response["Content-Type"], "application/json")
+        self.assertIn("tidak ditemukan", data["detail"])
+
+    def test_json_endpoints_are_read_only(self):
+        response = self.client.post(reverse("main:get_experience_json"))
+
+        self.assertEqual(response.status_code, 405)
+
+    def test_page_context_holds_deserialized_model_instances(self):
+        response = self.client.get(reverse("main:show_experience"))
+
+        experiences = response.context["experience_list"]
+        self.assertEqual(len(experiences), 2)
+        self.assertTrue(all(isinstance(item, Experience) for item in experiences))
+        self.assertEqual(experiences[0].pk, self.newer.pk)
+
+    def test_page_renders_data_delivered_by_the_json_endpoint(self):
+        """Bukti halaman memakai JSON: data yang hanya ada di JSON tetap tampil."""
+        only_in_json = Experience(
+            title="Hanya Ada Di Respons JSON", description="Tidak disimpan ke DB.", category="research"
+        )
+        fake_response = HttpResponse(
+            serializers.serialize("json", [only_in_json]), content_type="application/json"
+        )
+
+        with mock.patch("main.views.get_experience_json", return_value=fake_response):
+            response = self.client.get(reverse("main:show_experience"))
+
+        self.assertContains(response, "Hanya Ada Di Respons JSON")
+        self.assertNotContains(response, self.newer.title)
+
+    def test_page_search_filters_and_shows_query(self):
+        response = self.client.get(reverse("main:show_experience"), {"title": "Asisten"})
+
+        self.assertContains(response, self.older.title)
+        self.assertNotContains(response, self.newer.title)
+        self.assertContains(response, 'value="Asisten"')
+
+    def test_page_search_without_match_shows_specific_empty_state(self):
+        response = self.client.get(reverse("main:show_experience"), {"title": "xyz"})
+
+        self.assertContains(response, "Tidak ada pengalaman dengan judul tersebut.")
+
+    def test_page_shows_thumbnail_only_when_available(self):
+        response = self.client.get(reverse("main:show_experience"))
+
+        self.assertContains(response, 'src="https://example.com/magang.png"')
+        self.assertEqual(response.content.decode().count("experience-thumbnail"), 1)
+
+    def test_page_only_accepts_safe_methods(self):
+        response = self.client.post(reverse("main:show_experience"))
+
+        self.assertEqual(response.status_code, 405)
+
+    def test_categories_used_by_existing_data_are_valid_choices(self):
+        """`kepanitiaan` & `organisasi` dipakai data nyata dan harus ada di choices."""
+        valid = {value for value, _ in Experience.EXPERIENCE_CHOICES}
+
+        self.assertTrue({"kepanitiaan", "organisasi"} <= valid)
+
+
+class EducationJsonTest(TestCase):
+    def setUp(self):
+        Education.objects.all().delete()
+        self.ui = Education.objects.create(
+            nama_sekolah="Universitas Indonesia", tingkat="S1", tahun_masuk=2025
+        )
+        Education.objects.create(nama_sekolah="SMAK Contoh", tingkat="sma", tahun_masuk=2022)
+
+    def test_education_json_lists_all_and_filters_by_school_name(self):
+        all_data = json.loads(self.client.get(reverse("main:get_education_json")).content)
+        filtered = json.loads(
+            self.client.get(reverse("main:get_education_json"), {"nama_sekolah": "indonesia"}).content
+        )
+
+        self.assertEqual(len(all_data), 2)
+        self.assertEqual([item["pk"] for item in filtered], [str(self.ui.pk)])
+
+    def test_education_json_is_read_only(self):
+        response = self.client.post(reverse("main:get_education_json"))
+
+        self.assertEqual(response.status_code, 405)

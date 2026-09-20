@@ -10,6 +10,8 @@ class Experience(models.Model):
         ('part-time', 'Part-Time'),
         ('full-time', 'Full-Time'),
         ('freelance', 'Freelance'),
+        ('kepanitiaan', 'Kepanitiaan'),
+        ('organisasi', 'Organisasi'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -19,6 +21,10 @@ class Experience(models.Model):
     thumbnail = models.URLField(blank=True, null=True)
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-started_at']
+        
     def __str__(self):
         return self.title
     
