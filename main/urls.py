@@ -2,7 +2,9 @@ from django.urls import path
 
 from main.views import (
     create_education,
+    create_experience,
     delete_education,
+    delete_experience,
     download_portfolio_pdf,
     get_education_json,
     get_experience_detail_json,
@@ -10,6 +12,7 @@ from main.views import (
     show_education,
     show_experience,
     show_main,
+    update_experience,
 )
 
 app_name = "main"
@@ -21,11 +24,16 @@ urlpatterns = [
     path("education/", show_education, name="show_education"),
     path("portfolio/pdf/", download_portfolio_pdf, name="download_portfolio_pdf"),
 
-    # Education: form dan API
+    # Experience: form & aksi
+    path("experience/add/", create_experience, name="create_experience"),
+    path("experience/<uuid:experience_id>/edit/", update_experience, name="update_experience"),
+    path("experience/<uuid:experience_id>/delete/", delete_experience, name="delete_experience"),
+
+    # Education: form & aksi
     path("education/add/", create_education, name="create_education"),
     path("education/<uuid:education_id>/delete/", delete_education, name="delete_education"),
 
-    # JSON Data Delivery
+    # JSON Data Delivery (/api/... = endpoint untuk klien, bukan halaman)
     path("api/experience/", get_experience_json, name="get_experience_json"),
     path("api/experience/<uuid:experience_id>/", get_experience_detail_json, name="get_experience_detail_json"),
     path("api/education/", get_education_json, name="get_education_json"),

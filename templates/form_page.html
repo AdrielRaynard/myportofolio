@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}{{ heading }} - {{ name }}{% endblock title %}
+
+{% block content %}
+    {% comment %}
+        Halaman form generik untuk Create dan Update (Education & Experience).
+        Konteks: form, heading, submit_label, cancel_url.
+    {% endcomment %}
+    <main>
+        <section class="experience-section">
+            <div class="container">
+                <h1>{{ heading }}</h1>
+
+                <form method="post" class="entry-form">
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                        <div class="form-error">{{ form.non_field_errors }}</div>
+                    {% endif %}
+
+                    {% for field in form %}
+                        {% if field.widget_type == "checkbox" %}
+                            <div class="form-group form-group--checkbox">
+                                <label for="{{ field.id_for_label }}">
+                                    {{ field }}
+                                    <span>{{ field.label }}</span>
+                                </label>
+                                {% if field.help_text %}
+                                    <p class="form-help">{{ field.help_text }}</p>
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <div class="form-group">
+                                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                {{ field }}
+                                {% if field.help_text %}
+                                    <p class="form-help">{{ field.help_text }}</p>
+                                {% endif %}
+                                {% for error in field.errors %}
+                                    <p class="form-error">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+
+                    <button type="submit" class="button">{{ submit_label }}</button>
+                    <a href="{{ cancel_url }}" class="button button-secondary">Batal</a>
+                </form>
+            </div>
+        </section>
+    </main>
+{% endblock content %}

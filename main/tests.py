@@ -9,6 +9,8 @@ from django.core import serializers
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 from django.test import TestCase, override_settings
+from django.core.exceptions import ValidationError
+from main.forms import ExperienceForm, SecretCodeField, SecretCodeForm
 from main.models import Experience, Education
 
 
@@ -389,5 +391,319 @@ class EducationJsonTest(TestCase):
 
     def test_education_json_is_read_only(self):
         response = self.client.post(reverse("main:get_education_json"))
+                
+        self.assertEqual(response.status_code, 405)
+
+
+SECRET = "rahasia-test"
+
+
+@override_settings(PORTFOLIO_SECRET=SECRET)
+class SecretCodeFieldTest(TestCase):
+    def test_correct_secret_is_accepted(self):
+        self.assertEqual(SecretCodeField().clean(SECRET), SECRET)
+
+    def test_wrong_secret_is_rejected(self):
+        with self.assertRaises(ValidationError) as ctx:
+            SecretCodeField().clean("salah")
+
+        self.assertEqual(ctx.exception.code, "invalid_secret")
+
+    def test_empty_secret_is_rejected_as_required(self):
+        with self.assertRaises(ValidationError) as ctx:
+            SecretCodeField().clean("")
+
+        self.assertEqual(ctx.exception.code, "required")
+
+    def test_secret_is_compared_exactly_without_stripping(self):
+        with self.assertRaises(ValidationError):
+            SecretCodeField().clean(f" {SECRET} ")
+
+    @override_settings(PORTFOLIO_SECRET=None)
+    def test_fails_closed_when_secret_is_not_configured(self):
+        """Tanpa PORTFOLIO_SECRET di .env, tidak boleh ada input yang lolos."""
+        for candidate in ("apa-saja", "None", "x"):
+            with self.subTest(candidate=candidate):
+                with self.assertRaises(ValidationError):
+                    SecretCodeField().clean(candidate)
+
+    def test_secret_form_validates_via_the_field(self):
+        self.assertTrue(SecretCodeForm({"secret": SECRET}).is_valid())
+        self.assertFalse(SecretCodeForm({"secret": "salah"}).is_valid())
+
+    def test_secret_widget_never_renders_the_submitted_value(self):
+        html = str(SecretCodeForm({"secret": "salah"})["secret"])
+
+        self.assertIn('type="password"', html)
+        self.assertNotIn("salah", html)
+
+
+@override_settings(PORTFOLIO_SECRET=SECRET)
+class ExperienceFormTest(TestCase):
+    def valid_data(self, **overrides):
+        data = {
+            "title": "Asisten Dosen",
+            "description": "Membimbing mahasiswa baru.",
+            "category": "volunteer",
+            "thumbnail": "",
+            "secret": SECRET,
+        }
+        data.update(overrides)
+        return data
+
+    def test_model_fields_exclude_id_and_timestamps(self):
+        self.assertEqual(
+            ExperienceForm.Meta.fields, ["title", "description", "category", "thumbnail"]
+        )
+        for excluded in ("id", "started_at", "ended_at"):
+            self.assertNotIn(excluded, ExperienceForm().fields)
+
+    def test_form_uses_varied_field_types(self):
+        types = {name: type(f).__name__ for name, f in ExperienceForm().fields.items()}
+
+        self.assertEqual(types["title"], "CharField")
+        self.assertEqual(types["description"], "CharField")  # TextField -> Textarea
+        self.assertEqual(types["category"], "TypedChoiceField")
+        self.assertEqual(types["thumbnail"], "URLField")
+        self.assertEqual(types["is_finished"], "BooleanField")
+
+    def test_valid_data_creates_ongoing_experience(self):
+        form = ExperienceForm(self.valid_data())
+
+        self.assertTrue(form.is_valid(), form.errors)
+        experience = form.save()
+        self.assertTrue(experience.is_ongoing)
+        self.assertIsNone(experience.thumbnail)
+
+    def test_is_finished_sets_ended_at(self):
+        form = ExperienceForm(self.valid_data(is_finished="on"))
+
+        self.assertTrue(form.is_valid(), form.errors)
+        experience = form.save()
+        self.assertFalse(experience.is_ongoing)
+        self.assertIsNotNone(experience.ended_at)
+
+    def test_editing_finished_experience_keeps_original_end_date(self):
+        ended = timezone.now() - timezone.timedelta(days=30)
+        experience = Experience.objects.create(
+            title="Lama", description="d", category="research", ended_at=ended
+        )
+
+        form = ExperienceForm(self.valid_data(is_finished="on"), instance=experience)
+        form.is_valid()
+        form.save()
+
+        experience.refresh_from_db()
+        self.assertEqual(experience.ended_at, ended)
+
+    def test_unchecking_is_finished_reopens_the_experience(self):
+        experience = Experience.objects.create(
+            title="Lama", description="d", category="research", ended_at=timezone.now()
+        )
+
+        form = ExperienceForm(self.valid_data(), instance=experience)
+        form.is_valid()
+        form.save()
+
+        experience.refresh_from_db()
+        self.assertTrue(experience.is_ongoing)
+
+    def test_edit_form_prechecks_is_finished_from_saved_state(self):
+        finished = Experience.objects.create(
+            title="A", description="d", category="research", ended_at=timezone.now()
+        )
+        ongoing = Experience.objects.create(title="B", description="d", category="research")
+
+        self.assertTrue(ExperienceForm(instance=finished).fields["is_finished"].initial)
+        self.assertFalse(ExperienceForm(instance=ongoing).fields["is_finished"].initial)
+        self.assertIsNone(ExperienceForm().fields["is_finished"].initial)
+
+    def test_invalid_input_is_rejected_per_field(self):
+        cases = {
+            "title": ("", "required"),
+            "description": ("", "required"),
+            "category": ("bukan-kategori", "invalid_choice"),
+            "thumbnail": ("bukan url", "invalid"),
+            "secret": ("salah", "invalid_secret"),
+        }
+        for field, (value, code) in cases.items():
+            with self.subTest(field=field):
+                form = ExperienceForm(self.valid_data(**{field: value}))
+
+                self.assertFalse(form.is_valid())
+                self.assertEqual(form.errors.as_data()[field][0].code, code)
+
+
+@override_settings(PORTFOLIO_SECRET=SECRET)
+class ExperienceCrudViewTest(TestCase):
+    def setUp(self):
+        Experience.objects.all().delete()
+        self.experience = Experience.objects.create(
+            title="Staff Operasional",
+            description="Membantu tim operasional.",
+            category="kepanitiaan",
+        )
+
+    def payload(self, **overrides):
+        data = {
+            "title": "Magang Backend",
+            "description": "Membangun REST API.",
+            "category": "internship",
+            "thumbnail": "https://example.com/a.png",
+            "secret": SECRET,
+        }
+        data.update(overrides)
+        return data
+
+    # --- Create ---
+    def test_create_page_renders_generic_form_with_all_fields(self):
+        response = self.client.get(reverse("main:create_experience"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "form_page.html")
+        for name in ("title", "description", "category", "thumbnail", "is_finished", "secret"):
+            self.assertContains(response, f'name="{name}"')
+        self.assertContains(response, 'type="password"')
+
+    def test_create_saves_redirects_and_shows_flash_message(self):
+        response = self.client.post(
+            reverse("main:create_experience"), self.payload(), follow=True
+        )
+
+        self.assertRedirects(response, reverse("main:show_experience"))
+        self.assertTrue(Experience.objects.filter(title="Magang Backend").exists())
+        self.assertContains(response, "Pengalaman baru berhasil ditambahkan!")
+
+    def test_create_with_wrong_secret_saves_nothing_and_shows_error(self):
+        response = self.client.post(
+            reverse("main:create_experience"), self.payload(secret="salah")
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Kode rahasia salah.")
+        self.assertEqual(Experience.objects.count(), 1)
+
+    def test_create_with_invalid_data_keeps_typed_values(self):
+        response = self.client.post(
+            reverse("main:create_experience"), self.payload(description="")
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "form-error")
+        self.assertContains(response, 'value="Magang Backend"')
+        self.assertEqual(Experience.objects.count(), 1)
+
+    def test_created_data_is_immediately_available_in_json(self):
+        self.client.post(reverse("main:create_experience"), self.payload())
+
+        data = json.loads(self.client.get(reverse("main:get_experience_json")).content)
+        self.assertIn("Magang Backend", [item["fields"]["title"] for item in data])
+
+    # --- Update ---
+    def test_update_page_is_prefilled_with_existing_data(self):
+        response = self.client.get(
+            reverse("main:update_experience", args=[self.experience.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'value="Staff Operasional"')
+        self.assertContains(response, "Membantu tim operasional.")
+        # kategori data lama (di luar choices awal) harus terpilih, bukan jatuh ke default
+        self.assertContains(response, '<option value="kepanitiaan" selected>')
+
+    def test_update_changes_same_record_without_creating_new_one(self):
+        response = self.client.post(
+            reverse("main:update_experience", args=[self.experience.pk]),
+            self.payload(title="Judul Baru", category="organisasi"),
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse("main:show_experience"))
+        self.experience.refresh_from_db()
+        self.assertEqual(self.experience.title, "Judul Baru")
+        self.assertEqual(self.experience.category, "organisasi")
+        self.assertEqual(Experience.objects.count(), 1)
+        self.assertContains(response, "Pengalaman berhasil diperbarui!")
+
+    def test_update_with_wrong_secret_leaves_record_unchanged(self):
+        response = self.client.post(
+            reverse("main:update_experience", args=[self.experience.pk]),
+            self.payload(title="Diretas", secret="salah"),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.experience.refresh_from_db()
+        self.assertEqual(self.experience.title, "Staff Operasional")
+
+    def test_update_unknown_id_returns_404(self):
+        response = self.client.get(
+            reverse("main:update_experience", args=["00000000-0000-0000-0000-000000000000"])
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    # --- Delete ---
+    def test_delete_with_correct_secret_removes_record(self):
+        response = self.client.post(
+            reverse("main:delete_experience", args=[self.experience.pk]),
+            {"secret": SECRET},
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse("main:show_experience"))
+        self.assertFalse(Experience.objects.filter(pk=self.experience.pk).exists())
+        self.assertContains(response, "Pengalaman berhasil dihapus!")
+
+    def test_delete_with_wrong_or_missing_secret_keeps_record(self):
+        for payload in ({"secret": "salah"}, {}):
+            with self.subTest(payload=payload):
+                response = self.client.post(
+                    reverse("main:delete_experience", args=[self.experience.pk]),
+                    payload,
+                    follow=True,
+                )
+
+                self.assertTrue(Experience.objects.filter(pk=self.experience.pk).exists())
+                self.assertContains(response, "Kode rahasia salah. Data tidak dihapus.")
+                self.assertContains(response, "message--error")
+
+    def test_delete_rejects_get_requests(self):
+        response = self.client.get(reverse("main:delete_experience", args=[self.experience.pk]))
 
         self.assertEqual(response.status_code, 405)
+        self.assertTrue(Experience.objects.filter(pk=self.experience.pk).exists())
+
+    def test_delete_unknown_id_returns_404(self):
+        response = self.client.post(
+            reverse("main:delete_experience", args=["00000000-0000-0000-0000-000000000000"]),
+            {"secret": SECRET},
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    # --- Antarmuka halaman Experience ---
+    def test_experience_page_links_to_add_edit_and_delete(self):
+        response = self.client.get(reverse("main:show_experience"))
+
+        self.assertContains(response, reverse("main:create_experience"))
+        self.assertContains(response, reverse("main:update_experience", args=[self.experience.pk]))
+        self.assertContains(response, reverse("main:delete_experience", args=[self.experience.pk]))
+
+    def test_delete_modal_asks_for_secret_and_carries_csrf(self):
+        response = self.client.get(reverse("main:show_experience"))
+
+        self.assertContains(response, 'popover="auto"')
+        self.assertContains(response, 'name="secret"')
+        self.assertContains(response, "csrfmiddlewaretoken")
+
+    def test_no_stray_diff_markers_are_rendered(self):
+        """Regresi: karakter '+' sisa salinan patch pernah ikut tampil di halaman."""
+        response = self.client.get(reverse("main:show_experience"))
+
+        stray = [
+            line.strip()
+            for line in response.content.decode().splitlines()
+            if line.lstrip().startswith("+ ") or line.strip() == "+"
+        ]
+
+        self.assertEqual(stray, [])

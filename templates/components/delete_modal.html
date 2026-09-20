@@ -1,0 +1,76 @@
+{% comment %}
+    Tombol "Hapus" + modal konfirmasi (Popover API). Dipakai Education dan Experience.
+
+    Parameter (via `with`):
+      item_id      : id unik item (dipakai untuk id popover)
+      item_label   : nama item yang tampil di konfirmasi
+      delete_url   : URL view delete (method POST)
+      noun         : kata benda, mis. "pengalaman" / "riwayat pendidikan"
+
+    Penghapusan wajib menyertakan kode rahasia (divalidasi di view).
+{% endcomment %}
+<button type="button"
+        class="button button-danger"
+        popovertarget="delete-{{ item_id }}"
+        aria-label="Hapus {{ item_label }}"
+        title="Hapus {{ noun }}">
+    Hapus
+</button>
+
+<div id="delete-{{ item_id }}"
+     class="delete-modal"
+     popover="auto"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="delete-title-{{ item_id }}">
+
+    <button type="button"
+            class="delete-modal__backdrop"
+            popovertarget="delete-{{ item_id }}"
+            popovertargetaction="hide"
+            aria-label="Tutup konfirmasi hapus"></button>
+
+    <div class="delete-modal__content">
+        <button type="button"
+                class="delete-modal__close"
+                popovertarget="delete-{{ item_id }}"
+                popovertargetaction="hide"
+                aria-label="Tutup konfirmasi hapus">
+            ×
+        </button>
+
+        <h2 id="delete-title-{{ item_id }}">Hapus {{ noun|capfirst }}?</h2>
+
+        <p>
+            Apakah kamu yakin ingin menghapus
+            <strong>{{ item_label }}</strong>?
+            Tindakan ini tidak bisa dibatalkan.
+        </p>
+
+        <form method="post" action="{{ delete_url }}">
+            {% csrf_token %}
+
+            <div class="form-group">
+                <label for="delete-secret-{{ item_id }}">Kode Rahasia</label>
+                <input type="password"
+                       name="secret"
+                       id="delete-secret-{{ item_id }}"
+                       autocomplete="off"
+                       required>
+            </div>
+
+            <div class="delete-modal__actions">
+                <button type="button"
+                        class="button button-secondary"
+                        popovertarget="delete-{{ item_id }}"
+                        popovertargetaction="hide">
+                    Batal
+                </button>
+
+                <button type="submit" class="button button-danger">
+                    Ya, Hapus
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

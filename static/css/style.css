@@ -414,6 +414,7 @@ h1, .brand {
     --surface: #292522;
     --surface-deep: #211e1b;
     --desc-bg: rgba(245, 241, 235, 0.05);
+    --card-bg: #292522;
 
     color: var(--ink);
     background-color: var(--paper);
@@ -610,7 +611,7 @@ body {
     color: var(--accent-dark);
 }
 
-.education-form {
+.entry-form {
     width: 100%;
     max-width: 100%;
     margin-top: 1.5rem;
@@ -655,6 +656,25 @@ body {
     margin-top: 0.35rem;
 }
 
+.form-help {
+    margin-top: 0.35rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.form-group--checkbox label {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    cursor: pointer;
+}
+
+.form-group--checkbox input {
+    width: auto;
+    padding: 0;
+    accent-color: var(--accent);
+}
+
 .button {
     display: inline-block;
     height: fit-content;
@@ -676,7 +696,7 @@ body {
 
 /* education actions and search */
 
-.education-header {
+.section-header {
     width: 100%;
     display: flex;
     justify-content: space-between;
@@ -696,17 +716,17 @@ body {
     flex-direction: column;
 }
 
-.education-header h1 {
+.section-header h1 {
     margin-bottom: 0;
 }
 
-.education-add-button {
+.add-button {
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
 }
 
-.education-add-button span {
+.add-button span {
     font-size: 1.25rem;
     line-height: 1;
 }
@@ -733,13 +753,21 @@ body {
     border-color: var(--accent);
 }
 
-.education-card-actions {
+.card-actions {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
     margin-top: auto;
+    padding-top: 1rem;
 }
 
-.education-delete-modal {
+.experience-grid .experience-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.delete-modal {
     display: none;
     position: fixed;
     inset: 0;
@@ -756,11 +784,11 @@ body {
     justify-content: center;
 }
 
-.education-delete-modal:popover-open {
+.delete-modal:popover-open {
     display: flex;
 }
 
-.education-delete-modal__backdrop {
+.delete-modal__backdrop {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -771,7 +799,7 @@ body {
     cursor: default;
 }
 
-.education-delete-modal__content {
+.delete-modal__content {
     position: relative;
     z-index: 1;
     width: min(100%, 480px);
@@ -782,7 +810,7 @@ body {
     box-shadow: 0 1rem 3rem rgba(28, 25, 23, 0.22);
 }
 
-.education-delete-modal__content h2 {
+.delete-modal__content h2 {
     margin: 0 0 0.75rem;
     font-family:
         "Space Grotesk",
@@ -791,7 +819,7 @@ body {
     font-size: 1.5rem;
 }
 
-.education-delete-modal__close {
+.delete-modal__close {
     position: absolute;
     top: 1rem;
     right: 1rem;
@@ -804,7 +832,11 @@ body {
     cursor: pointer;
 }
 
-.education-delete-modal__actions {
+.delete-modal__content .form-group {
+    margin: 1rem 0 0;
+}
+
+.delete-modal__actions {
     display: flex;
     justify-content: flex-end;
     gap: 0.75rem;
@@ -816,12 +848,12 @@ body {
 }
 
 @media (max-width: 600px) {
-    .education-header {
+    .section-header {
         align-items: flex-start;
         flex-direction: column;
     }
 
-    .education-add-button {
+    .add-button {
         width: 100%;
         justify-content: center;
     }
@@ -838,22 +870,22 @@ body {
         grid-template-columns: 1fr;
     }
 
-    .education-delete-modal {
+    .delete-modal {
         align-items: flex-end;
         padding: 0;
     }
 
-    .education-delete-modal__content {
+    .delete-modal__content {
         width: 100%;
         padding: 1.25rem;
         border-radius: var(--radius) var(--radius) 0 0;
     }
 
-    .education-delete-modal__actions {
+    .delete-modal__actions {
         flex-direction: column-reverse;
     }
 
-    .education-delete-modal__actions .button {
+    .delete-modal__actions .button {
         width: 100%;
         text-align: center;
     }

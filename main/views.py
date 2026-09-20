@@ -3,7 +3,7 @@
 Struktur berkas:
     1. Helper bersama      : konteks halaman, respons JSON, deserialisasi JSON.
     2. Profile             : halaman utama.
-    3. Experience          : halaman + JSON Data Delivery.
+    3. Experience          : halaman + JSON Data Delivery + Create/Update/Delete.
     4. Education           : halaman + JSON + Create + Delete.
     5. Portfolio PDF       : unduh ringkasan portofolio.
 """
@@ -15,11 +15,12 @@ from django.core import serializers
 
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.template.loader import render_to_string
-from django.views.decorators.http import require_safe
+from django.views.decorators.http import require_POST, require_safe
 from xhtml2pdf import pisa
 
-from main.forms import EducationForm
+from main.forms import EducationForm, ExperienceForm, SecretCodeForm
 from main.models import Education, Experience
 
 OWNER_NAME = "Adriel"
@@ -63,6 +64,51 @@ def _objects_from_json(json_response):
     payload = json_response.content.decode("utf-8")
     return [item.object for item in serializers.deserialize("json", payload)]
 
+def _form_view(
+    request,
+    form_class,
+    *,
+    instance=None,
+    heading,
+    submit_label,
+    cancel_url,
+    success_url,
+    success_message,
+):
+    """View generik halaman Create/Update berbasis ModelForm (pola POST-Redirect-GET).
+
+    - GET            : tampilkan form (terisi data lama jika `instance` diberikan).
+    - POST valid     : simpan, tampilkan flash message, redirect ke `success_url`.
+    - POST tidak valid: render ulang form beserta pesan error tiap field.
+    """
+    is_post = request.method == "POST"
+    form = form_class(request.POST if is_post else None, instance=instance)
+
+    if is_post and form.is_valid():
+        form.save()
+        messages.success(request, success_message)
+        return redirect(success_url)
+
+    context = _page_context(
+        form=form,
+        heading=heading,
+        submit_label=submit_label,
+        cancel_url=cancel_url,
+    )
+    return render(request, "form_page.html", context)
+
+
+def _delete_with_secret(request, instance, *, success_url, success_message):
+    """Hapus `instance` hanya jika kode rahasia pada POST benar, lalu redirect."""
+    form = SecretCodeForm(request.POST)
+
+    if form.is_valid():
+        instance.delete()
+        messages.success(request, success_message)
+    else:
+        messages.error(request, "Kode rahasia salah. Data tidak dihapus.")
+
+    return redirect(success_url)
 
 # ---------------------------------------------------------------------------
 # Profile
@@ -113,6 +159,42 @@ def show_experience(request):
         title_query=request.GET.get("title", "").strip(),
     )
     return render(request, "experience.html", context)
+
+def create_experience(request):
+    return _form_view(
+        request,
+        ExperienceForm,
+        heading="Tambah Pengalaman",
+        submit_label="Tambah Pengalaman",
+        cancel_url=reverse("main:show_experience"),
+        success_url="main:show_experience",
+        success_message="Pengalaman baru berhasil ditambahkan!",
+    )
+
+
+def update_experience(request, experience_id):
+    experience = get_object_or_404(Experience, pk=experience_id)
+    return _form_view(
+        request,
+        ExperienceForm,
+        instance=experience,
+        heading="Ubah Pengalaman",
+        submit_label="Simpan Perubahan",
+        cancel_url=reverse("main:show_experience"),
+        success_url="main:show_experience",
+        success_message="Pengalaman berhasil diperbarui!",
+    )
+
+
+@require_POST
+def delete_experience(request, experience_id):
+    experience = get_object_or_404(Experience, pk=experience_id)
+    return _delete_with_secret(
+        request,
+        experience,
+        success_url="main:show_experience",
+        success_message="Pengalaman berhasil dihapus!",
+    )
 
 # ---------------------------------------------------------------------------
 # Education
