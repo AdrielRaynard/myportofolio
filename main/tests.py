@@ -6,7 +6,7 @@ from django.utils import timezone
 from django.contrib.messages import constants as message_levels
 from django.contrib.messages.storage.base import Message
 from django.core import serializers
-from django.http import HttpResponse
+from django.http import HttpResponse, response
 from django.template.loader import render_to_string
 from django.test import TestCase, override_settings
 from django.core.exceptions import ValidationError
@@ -348,6 +348,8 @@ class ExperienceJsonTest(TestCase):
         self.assertContains(response, self.older.title)
         self.assertNotContains(response, self.newer.title)
         self.assertContains(response, 'value="Asisten"')
+        self.assertContains(response, "data-live-search")
+        self.assertContains(response, 'data-live-search-target=".experience-grid"')
 
     def test_page_search_without_match_shows_specific_empty_state(self):
         response = self.client.get(reverse("main:show_experience"), {"title": "xyz"})
@@ -388,6 +390,12 @@ class EducationJsonTest(TestCase):
 
         self.assertEqual(len(all_data), 2)
         self.assertEqual([item["pk"] for item in filtered], [str(self.ui.pk)])
+
+    def test_education_page_has_live_search_hooks(self):
+        response = self.client.get(reverse("main:show_education"))
+        
+        self.assertContains(response, "data-live-search")
+        self.assertContains(response, 'data-live-search-target=".education-grid"')
 
     def test_education_json_is_read_only(self):
         response = self.client.post(reverse("main:get_education_json"))

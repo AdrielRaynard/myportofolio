@@ -19,7 +19,9 @@
 
                 <form method="get"
                       action="{% url 'main:show_experience' %}"
-                      class="search-form">
+                      class="search-form"
+                      data-live-search
+                      data-live-search-target=".experience-grid">
                     <input type="search"
                            name="title"
                            value="{{ title_query }}"

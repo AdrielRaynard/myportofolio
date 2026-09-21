@@ -20,7 +20,9 @@
 
                 <form method="get"
                       action="{% url 'main:show_education' %}"
-                      class="search-form">
+                      class="search-form"
+                      data-live-search
+                      data-live-search-target=".education-grid">
                     <input type="search"
                            name="nama_sekolah"
                            value="{{ nama_sekolah_query }}"
