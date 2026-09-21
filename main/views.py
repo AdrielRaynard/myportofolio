@@ -4,7 +4,7 @@ Struktur berkas:
     1. Helper bersama      : konteks halaman, respons JSON, deserialisasi JSON.
     2. Profile             : halaman utama.
     3. Experience          : halaman + JSON Data Delivery + Create/Update/Delete.
-    4. Education           : halaman + JSON + Create + Delete.
+    4. Education           : halaman + JSON Data Delivery + Create/Update/Delete.
     5. Portfolio PDF       : unduh ringkasan portofolio.
 """
 
@@ -212,6 +212,12 @@ def get_education_json(request):
     return _json_response(education)
 
 @require_safe
+def get_education_detail_json(request, education_id):
+    """Satu riwayat pendidikan dalam JSON berdasarkan id (UUID)."""
+    return _json_detail_response(Education, education_id)
+
+
+@require_safe
 def show_education(request):
     """Halaman Education: data diambil dari JSON lalu dideserialisasi."""
     education = _objects_from_json(get_education_json(request))
@@ -223,22 +229,39 @@ def show_education(request):
     return render(request, "education.html", context)
 
 def create_education(request):
-    form = EducationForm(request.POST or None)
+    return _form_view(
+        request,
+        EducationForm,
+        heading="Tambah Riwayat Pendidikan",
+        submit_label="Tambah Pendidikan",
+        cancel_url=reverse("main:show_education"),
+        success_url="main:show_education",
+        success_message="Pendidikan baru berhasil ditambahkan!",
+    )
 
-    if request.method == "POST" and form.is_valid():
-        form.save()
-        messages.success(request, "Pendidikan baru berhasil ditambahkan!")
-        return redirect("main:show_education")
+def update_education(request, education_id):
+    education = get_object_or_404(Education, pk=education_id)
+    return _form_view(
+        request,
+        EducationForm,
+        instance=education,
+        heading="Ubah Riwayat Pendidikan",
+        submit_label="Simpan Perubahan",
+        cancel_url=reverse("main:show_education"),
+        success_url="main:show_education",
+        success_message="Riwayat pendidikan berhasil diperbarui!",
+    )
 
-    return render(request, "education_form.html", _page_context(form=form))
-
+@require_POST
 def delete_education(request, education_id):
     education = get_object_or_404(Education, pk=education_id)
 
-    if request.method == "POST":
-        education.delete()
-        messages.success(request, "Riwayat pendidikan berhasil dihapus!")
-        return redirect("main:show_education")
+    return _delete_with_secret(
+        request,
+        education,
+        success_url="main:show_education",
+        success_message="Riwayat pendidikan berhasil dihapus!",
+    )
 
 # ---------------------------------------------------------------------------
 # Portfolio PDF

@@ -6,12 +6,14 @@ from main.views import (
     delete_education,
     delete_experience,
     download_portfolio_pdf,
+    get_education_detail_json,
     get_education_json,
     get_experience_detail_json,
     get_experience_json,
     show_education,
     show_experience,
     show_main,
+    update_education,
     update_experience,
 )
 
@@ -31,10 +33,12 @@ urlpatterns = [
 
     # Education: form & aksi
     path("education/add/", create_education, name="create_education"),
+    path("education/<uuid:education_id>/edit/", update_education, name="update_education"),
     path("education/<uuid:education_id>/delete/", delete_education, name="delete_education"),
 
     # JSON Data Delivery (/api/... = endpoint untuk klien, bukan halaman)
     path("api/experience/", get_experience_json, name="get_experience_json"),
     path("api/experience/<uuid:experience_id>/", get_experience_detail_json, name="get_experience_detail_json"),
     path("api/education/", get_education_json, name="get_education_json"),
+    path("api/education/<uuid:education_id>/", get_education_detail_json, name="get_education_detail_json"),
 ]

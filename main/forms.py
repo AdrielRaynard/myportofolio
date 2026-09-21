@@ -112,76 +112,66 @@ class ExperienceForm(ModelForm):
         return experience
 
 class EducationForm(ModelForm):
-    secret = forms.CharField(
-        label="Kode Rahasia",
-        widget=forms.PasswordInput
-)
+    """Form tambah/ubah riwayat pendidikan (dilindungi kode rahasia)."""
+
+    secret = SecretCodeField()
 
     class Meta:
         model = Education
         fields = [
-        "nama_sekolah",
-        "tingkat",
-        "jurusan",
-        "tahun_masuk",
-        "tahun_lulus",
-        "deskripsi",
-]
-
+            "nama_sekolah",
+            "tingkat",
+            "jurusan",
+            "tahun_masuk",
+            "tahun_lulus",
+            "deskripsi",
+        ]
 
         labels = {
-        "nama_sekolah": "Nama Sekolah / Universitas",
-        "tingkat": "Tingkat Pendidikan",
-        "jurusan": "Jurusan",
-        "tahun_masuk": "Tahun Masuk",
-        "tahun_lulus": "Tahun Lulus",
-        "deskripsi": "Deskripsi Pendidikan",
-    }
+            "nama_sekolah": "Nama Sekolah / Universitas",
+            "tingkat": "Tingkat Pendidikan",
+            "jurusan": "Jurusan",
+            "tahun_masuk": "Tahun Masuk",
+            "tahun_lulus": "Tahun Lulus",
+            "deskripsi": "Deskripsi Pendidikan",
+        }
+
+        help_texts = {
+            "tahun_lulus": "Kosongkan jika masih menempuh pendidikan.",
+        }
 
         widgets = {
-        "nama_sekolah": TextInput(
-            attrs={
-                "placeholder": "Universitas Indonesia",
-                "maxlength": 255,
-            }
-        ),
-        "tingkat": Select(
-            attrs={
-                "placeholder": "Pilih tingkat pendidikan",
-            }
-        ),
-        "jurusan": TextInput(
-            attrs={
-                "placeholder": "Sistem Informasi",
-                "maxlength": 255,
-            }
-        ),
-        "tahun_masuk": NumberInput(
-            attrs={
-                "placeholder": "2025",
-                "min": 1900,
-                "max": 2100,
-            }
-        ),
-        "tahun_lulus": NumberInput(
-            attrs={
-                "placeholder": "2029",
-                "min": 1900,
-                "max": 2100,
-            }
-        ),
-        "deskripsi": Textarea(
-            attrs={
-                "placeholder": "Ceritakan pengalaman pendidikanmu",
-                "rows": 3,
-            }
-        ),
-    }
+            "nama_sekolah": TextInput(
+                attrs={"placeholder": "Universitas Indonesia", "maxlength": 255}
+            ),
+            "tingkat": Select(),
+            "jurusan": TextInput(
+                attrs={"placeholder": "Sistem Informasi", "maxlength": 255}
+            ),
+            "tahun_masuk": NumberInput(
+                attrs={"placeholder": "2025", "min": 1900, "max": 2100}
+            ),
+            "tahun_lulus": NumberInput(
+                attrs={"placeholder": "2029", "min": 1900, "max": 2100}
+            ),
+            "deskripsi": Textarea(
+                attrs={
+                    "placeholder": "Ceritakan pengalaman pendidikanmu",
+                    "rows": 3,
+                }
+            ),
+        }
 
-def clean_secret(self):
-    secret = self.cleaned_data["secret"]
+    def clean(self):
+        """Validasi lintas-field: tahun lulus tidak boleh sebelum tahun masuk."""
+        cleaned_data = super().clean()
+        tahun_masuk = cleaned_data.get("tahun_masuk")
+        tahun_lulus = cleaned_data.get("tahun_lulus")
 
-    if secret != settings.PORTFOLIO_SECRET:
-        raise forms.ValidationError("Kode rahasia salah.")
+        if tahun_masuk and tahun_lulus and tahun_lulus < tahun_masuk:
+            self.add_error(
+                "tahun_lulus",
+                "Tahun lulus tidak boleh lebih awal dari tahun masuk.",
+            )
 
-    return secret
+        return cleaned_data

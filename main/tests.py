@@ -10,7 +10,7 @@ from django.http import HttpResponse
 from django.template.loader import render_to_string
 from django.test import TestCase, override_settings
 from django.core.exceptions import ValidationError
-from main.forms import ExperienceForm, SecretCodeField, SecretCodeForm
+from main.forms import EducationForm, ExperienceForm, SecretCodeField, SecretCodeForm
 from main.models import Experience, Education
 
 
@@ -707,3 +707,263 @@ class ExperienceCrudViewTest(TestCase):
         ]
 
         self.assertEqual(stray, [])
+
+@override_settings(PORTFOLIO_SECRET=SECRET)
+class EducationFormTest(TestCase):
+    def valid_data(self, **overrides):
+        data = {
+            "nama_sekolah": "Universitas Indonesia",
+            "tingkat": "S1",
+            "jurusan": "Sistem Informasi",
+            "tahun_masuk": 2025,
+            "tahun_lulus": 2029,
+            "deskripsi": "",
+            "secret": SECRET,
+        }
+        data.update(overrides)
+        return data
+
+    def test_wrong_secret_is_rejected(self):
+        """Regresi: clean_secret dulu berada di luar class sehingga tidak pernah dipanggil."""
+        form = EducationForm(self.valid_data(secret="asal-isi"))
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors.as_data()["secret"][0].code, "invalid_secret")
+
+    def test_missing_secret_is_rejected(self):
+        form = EducationForm(self.valid_data(secret=""))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("secret", form.errors)
+
+    def test_correct_secret_saves_education(self):
+        form = EducationForm(self.valid_data())
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.save().nama_sekolah, "Universitas Indonesia")
+
+    def test_graduation_year_is_optional_for_ongoing_education(self):
+        form = EducationForm(self.valid_data(tahun_lulus=""))
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertTrue(form.save().is_ongoing)
+
+    def test_graduation_year_cannot_precede_entry_year(self):
+        form = EducationForm(self.valid_data(tahun_masuk=2025, tahun_lulus=2020))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("tahun_lulus", form.errors)
+
+
+@override_settings(PORTFOLIO_SECRET=SECRET)
+class EducationCrudViewTest(TestCase):
+    def setUp(self):
+        Education.objects.all().delete()
+        self.education = Education.objects.create(
+            nama_sekolah="SMAK Contoh", tingkat="sma", tahun_masuk=2022, tahun_lulus=2025
+        )
+
+    def payload(self, **overrides):
+        data = {
+            "nama_sekolah": "Universitas Indonesia",
+            "tingkat": "S1",
+            "jurusan": "Sistem Informasi",
+            "tahun_masuk": 2025,
+            "tahun_lulus": "",
+            "deskripsi": "Sedang kuliah.",
+            "secret": SECRET,
+        }
+        data.update(overrides)
+        return data
+
+    # --- Create ---
+    def test_create_page_uses_generic_form_template(self):
+        response = self.client.get(reverse("main:create_education"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "form_page.html")
+        self.assertContains(response, "Tambah Riwayat Pendidikan")
+
+    def test_create_with_correct_secret_saves(self):
+        response = self.client.post(
+            reverse("main:create_education"), self.payload(), follow=True
+        )
+
+        self.assertRedirects(response, reverse("main:show_education"))
+        self.assertTrue(
+            Education.objects.filter(nama_sekolah="Universitas Indonesia").exists()
+        )
+        self.assertContains(response, "Pendidikan baru berhasil ditambahkan!")
+
+    def test_create_with_wrong_secret_saves_nothing(self):
+        response = self.client.post(
+            reverse("main:create_education"), self.payload(secret="salah")
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Kode rahasia salah.")
+        self.assertEqual(Education.objects.count(), 1)
+
+    # --- Update ---
+    def test_update_page_is_prefilled(self):
+        response = self.client.get(
+            reverse("main:update_education", args=[self.education.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Ubah Riwayat Pendidikan")
+        self.assertContains(response, 'value="SMAK Contoh"')
+        self.assertContains(response, 'value="2022"')
+        self.assertContains(response, '<option value="sma" selected>')
+
+    def test_update_changes_same_record_without_creating_new_one(self):
+        response = self.client.post(
+            reverse("main:update_education", args=[self.education.pk]),
+            self.payload(
+                nama_sekolah="SMAK Baru", tingkat="sma", tahun_masuk=2021
+            ),
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse("main:show_education"))
+        self.education.refresh_from_db()
+        self.assertEqual(self.education.nama_sekolah, "SMAK Baru")
+        self.assertEqual(self.education.tahun_masuk, 2021)
+        self.assertEqual(Education.objects.count(), 1)
+        self.assertContains(
+            response, "Riwayat pendidikan berhasil diperbarui!"
+        )
+
+    def test_update_with_wrong_secret_leaves_record_unchanged(self):
+        self.client.post(
+            reverse("main:update_education", args=[self.education.pk]),
+            self.payload(nama_sekolah="Diretas", secret="salah"),
+        )
+
+        self.education.refresh_from_db()
+        self.assertEqual(self.education.nama_sekolah, "SMAK Contoh")
+
+    def test_update_unknown_id_returns_404(self):
+        response = self.client.get(
+            reverse(
+                "main:update_education",
+                args=["00000000-0000-0000-0000-000000000000"],
+            )
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    # --- Delete ---
+    def test_delete_with_correct_secret_removes_record(self):
+        response = self.client.post(
+            reverse("main:delete_education", args=[self.education.pk]),
+            {"secret": SECRET},
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse("main:show_education"))
+        self.assertFalse(
+            Education.objects.filter(pk=self.education.pk).exists()
+        )
+        self.assertContains(
+            response, "Riwayat pendidikan berhasil dihapus!"
+        )
+
+    def test_delete_without_valid_secret_keeps_record(self):
+        for payload in ({"secret": "salah"}, {}):
+            with self.subTest(payload=payload):
+                response = self.client.post(
+                    reverse(
+                        "main:delete_education",
+                        args=[self.education.pk],
+                    ),
+                    payload,
+                    follow=True,
+                )
+
+                self.assertTrue(
+                    Education.objects.filter(pk=self.education.pk).exists()
+                )
+                self.assertContains(
+                    response,
+                    "Kode rahasia salah. Data tidak dihapus.",
+                )
+
+    def test_delete_rejects_get_requests(self):
+        response = self.client.get(
+            reverse("main:delete_education", args=[self.education.pk])
+        )
+
+        self.assertEqual(response.status_code, 405)
+        self.assertTrue(
+            Education.objects.filter(pk=self.education.pk).exists()
+        )
+
+    # --- JSON detail ---
+    def test_detail_json_returns_single_education(self):
+        response = self.client.get(
+            reverse(
+                "main:get_education_detail_json",
+                args=[self.education.pk],
+            )
+        )
+        data = json.loads(response.content)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(data), 1)
+        self.assertEqual(
+            data[0]["fields"]["nama_sekolah"],
+            "SMAK Contoh",
+        )
+
+    def test_detail_json_returns_json_404_for_unknown_id(self):
+        response = self.client.get(
+            reverse(
+                "main:get_education_detail_json",
+                args=["00000000-0000-0000-0000-000000000000"],
+            )
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIn(
+            "tidak ditemukan",
+            json.loads(response.content)["detail"],
+        )
+
+    # --- Antarmuka halaman Education ---
+    def test_education_page_now_has_edit_and_delete_controls(self):
+        """Regresi: modal hapus Education dulu dibuat tetapi tidak pernah di-include."""
+        response = self.client.get(reverse("main:show_education"))
+
+        self.assertContains(
+            response,
+            reverse(
+                "main:update_education",
+                args=[self.education.pk],
+            ),
+        )
+        self.assertContains(
+            response,
+            reverse(
+                "main:delete_education",
+                args=[self.education.pk],
+            ),
+        )
+        self.assertContains(response, 'popover="auto"')
+        self.assertContains(response, 'name="secret"')
+
+    def test_created_education_is_immediately_available_in_json(self):
+        self.client.post(
+            reverse("main:create_education"),
+            self.payload(),
+        )
+
+        data = json.loads(
+            self.client.get(
+                reverse("main:get_education_json")
+            ).content
+        )
+        self.assertIn(
+            "Universitas Indonesia",
+            [i["fields"]["nama_sekolah"] for i in data],
+        )

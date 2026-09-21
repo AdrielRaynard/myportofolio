@@ -68,6 +68,15 @@
                                 </p>
                             {% endif %}
 
+                            <div class="card-actions">
+                                <a href="{% url 'main:update_education' education.id %}"
+                                    class="button button-secondary">
+                                    Ubah
+                                </a>
+
+                                {% url 'main:delete_education' education.id as delete_url %}
+                                {% include "components/delete_modal.html" with item_id=education.id item_label=education.nama_sekolah delete_url=delete_url noun="riwayat pendidikan" %}
+                            </div>
                         </article>
                     {% empty %}
                         {% if nama_sekolah_query %}
