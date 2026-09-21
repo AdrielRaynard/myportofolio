@@ -566,7 +566,7 @@ body {
 .education-card::before {
     content: "";
     position: absolute;
-    left: -1.94rem;
+    left: calc(var(--timeline-gap, 2rem) / -2 - 0.325rem);
     top: 1.6rem;
     width: 0.65rem;
     height: 0.65rem;
@@ -706,9 +706,10 @@ body {
 }
 
 .education-grid {
+    --timeline-gap: 2rem;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1rem;
+    gap: 1rem var(--timeline-gap);
 }
 
 .education-grid .education-card {
