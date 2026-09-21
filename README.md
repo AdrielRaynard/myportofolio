@@ -1,337 +1,669 @@
-Nama : Adriel
+# MyPortofolio
 
-NPM: 2506587150
-
-Kelas : PBP B
-
-rubah sedikit
-
-### Tugas 1
-
-## Deskripsi Proyek
-
-Website ini merupakan halaman portofolio pribadi yang dikembangkan dari Tutorial 01.
-Website dibuat menggunakan HTML5 dan CSS3 dengan fokus pada penerapan struktur HTML
-yang terorganisasi, responsive design, dan styling menggunakan CSS.
-
-Pada pengembangan tugas ini, saya mempertahankan section **About Me** yang berisi
-informasi pribadi seperti nama, NPM, program studi, foto, bio, serta informasi kontak
-dan media sosial.
-
-Saya kemudian menambahkan section **Skills** yang berisi beberapa kemampuan dan
-teknologi yang saya kuasai. Section Skills menggunakan **CSS Grid** untuk mengatur
-layout dan dilengkapi dengan efek hover serta animasi agar tampilan website lebih
-interaktif.
-
-Sebagai fitur tambahan, saya juga mengimplementasikan **Dark Mode** menggunakan
-HTML dan CSS tanpa JavaScript. Website menggunakan CSS Flexbox, CSS Grid,
-media queries, dan responsive design agar tampilan dapat menyesuaikan dengan
-berbagai ukuran layar, baik desktop maupun mobile.
-
-Website pada tahap ini masih berupa static web dan belum menggunakan database
-maupun arsitektur MVT. Penggunaan database dan penerapan MVT mungkin akan dilakukan
-pada tahap pengembangan berikutnya.
+Portofolio pribadi berbasis Django untuk menampilkan profil, **Experience**, dan **Education** secara dinamis. Proyek ini dikembangkan secara bertahap selama Tutorial/Pertemuan PBP dengan menerapkan HTML5/CSS3, Django MVT, database, form berbasis `ModelForm`, CRUD, JSON Data Delivery, template inheritance, serta beberapa fitur tambahan.
 
 ## Informasi Mahasiswa
 
 - **Nama:** Adriel Raynard Davis Sihotang
 - **NPM:** 2506587150
 - **Kelas:** PBP B
+- **Program Studi:** S1 Sistem Informasi
+- **Institusi:** Universitas Indonesia
 
-## Fitur
+---
 
-- About Me section
-- Informasi profil pribadi
-- Skills section
-- Responsive layout
-- CSS Grid dan Flexbox
-- Hover effects
-- CSS animation
-- Dark Mode
-- Responsive design untuk desktop dan mobile
+## Deskripsi Proyek
+
+Website ini merupakan portofolio pribadi yang berkembang dari static web menjadi aplikasi Django yang mengambil data dari database.
+
+Pada versi awal, informasi portofolio ditulis langsung pada template HTML. Pada tahap berikutnya, data **Education** dan **Experience** disimpan sebagai model Django sehingga dapat dikelola secara dinamis. Halaman web menggunakan template inheritance dengan `base.html`, sementara data juga tersedia melalui endpoint JSON.
+
+Untuk menjaga konsistensi dan mengurangi pengulangan kode, template halaman web yang memiliki struktur umum menggunakan `{% extends "base.html" %}`. Template `portfolio_pdf.html` menjadi pengecualian karena dirender khusus oleh `xhtml2pdf` dan membutuhkan struktur HTML serta CSS tersendiri.
+
+---
+
+# Progres Mingguan
+
+## Tugas 1 — Static Portfolio
+
+### Deskripsi
+
+Website pada tahap ini masih berupa **static web** yang dibuat dengan HTML5 dan CSS3. Halaman utama berisi informasi profil, foto, bio, informasi kontak/media sosial, serta bagian Skills.
+
+### Fitur
+
+- About Me / Profile
+- Skills
+- Informasi nama, NPM, program studi, bio, dan foto
 - Social media links
+- Responsive layout
+- CSS Flexbox dan CSS Grid
+- Hover effects dan animation
+- Dark Mode berbasis CSS
+- Media queries untuk tampilan desktop dan mobile
 
-## Teknologi yang Digunakan
+### Pembelajaran
 
-- HTML5
-- CSS3
-- Django
-- CSS Flexbox
-- CSS Grid
-- CSS Media Queries
-- CSS Animation
-- Responsive Web Design
+Tahap ini berfokus pada struktur HTML yang rapi, elemen semantik, responsive design, dan pemisahan struktur halaman dengan styling CSS.
 
-## Struktur Project
+### Pertanyaan Reflektif Tugas 1
 
-Struktur utama project adalah sebagai berikut:
+#### 1. Penggunaan Elemen Semantik HTML5
+
+Saya menggunakan elemen semantik HTML5 seperti `<section>` dan `<aside>` untuk mengelompokkan konten berdasarkan fungsi dan hubungan informasinya. Misalnya, bagian About Me digunakan sebagai konten utama, sedangkan Skills dapat ditempatkan sebagai informasi pendukung.
+
+Penggunaan elemen semantik membuat struktur dokumen lebih mudah dipahami, lebih terorganisasi, dan membantu proses styling maupun pengembangan halaman di tahap selanjutnya.
+
+#### 2. Tantangan Responsive Layout
+
+Tantangan utama adalah menjaga layout tetap rapi ketika ukuran layar berubah. Layout yang terlihat baik pada desktop dapat menjadi terlalu sempit pada layar mobile.
+
+Solusinya adalah menggunakan CSS Grid, Flexbox, dan media queries. Pada ukuran layar yang lebih kecil, beberapa bagian diubah menjadi satu kolom sehingga informasi utama tetap mudah dibaca. Ukuran gambar dan spacing juga disesuaikan agar tidak mengambil terlalu banyak ruang.
+
+#### 3. Batasan Static Web dan Pengembangan Selanjutnya
+
+Pada static web, perubahan isi portofolio harus dilakukan langsung pada source code HTML. Hal ini kurang praktis ketika jumlah data bertambah.
+
+Pengembangan berikutnya dilakukan dengan Django agar data dapat disimpan pada database, diproses oleh view, dan ditampilkan melalui template secara dinamis.
+
+---
+
+## Tugas 2 — Django MVT, Database, dan Education
+
+### Deskripsi
+
+Pada tahap ini proyek beralih menjadi aplikasi Django dengan arsitektur **Model-View-Template (MVT)**. Data riwayat pendidikan disimpan pada model `Education` dan diambil dari database menggunakan Django ORM.
+
+Model `Education` memiliki field dengan tipe data yang beragam, antara lain:
+
+- `nama_sekolah` — `CharField`
+- `tingkat` — `CharField` dengan pilihan (`choices`)
+- `jurusan` — `CharField`
+- `tahun_masuk` — `PositiveIntegerField`
+- `tahun_lulus` — `PositiveIntegerField` dan dapat dikosongkan
+- `deskripsi` — `TextField`
+
+### Alur Dasar MVT
+
+1. Browser mengirim HTTP request ke server Django.
+2. `portofolio/urls.py` menerima request lalu meneruskannya ke URL aplikasi `main` melalui `include()`.
+3. `main/urls.py` mencocokkan URL dengan view yang sesuai.
+4. View mengambil atau mengolah data menggunakan model dan Django ORM.
+5. View mengirim data melalui context ke template.
+6. Template menghasilkan HTML.
+7. Django mengirim HTTP response kembali ke browser.
+
+### Pertanyaan Reflektif Tugas 2
+
+#### 1. Alur request sampai data tampil pada browser
+
+Ketika pengguna membuka halaman seperti `/education/`, browser mengirim request ke server Django. Root URL di `portofolio/urls.py` meneruskan request ke `main/urls.py`. Setelah pola `education/` ditemukan, Django menjalankan `show_education` di `main/views.py`.
+
+View kemudian mengambil data melalui model `Education`. Django ORM menerjemahkan operasi tersebut menjadi query ke database dan mengembalikan hasilnya. Data dimasukkan ke dalam context, lalu template `education.html` diproses menggunakan Django Template Language. Hasil akhirnya berupa HTML yang dikirim kembali sebagai HTTP response dan ditampilkan oleh browser.
+
+#### 2. Mengapa data disimpan dalam model?
+
+Data yang disimpan dalam model dapat dikelola secara terpusat dan tidak perlu ditulis berulang kali di template. Perubahan data dapat dilakukan tanpa mengubah struktur HTML, sehingga pemeliharaan menjadi lebih mudah.
+
+Model juga memungkinkan data di-query, difilter, diurutkan, dan digunakan kembali pada halaman lain. Pemisahan antara data dan presentasi membuat aplikasi lebih mudah dikembangkan dibandingkan jika semua data di-hardcode di template.
+
+#### 3. Perbedaan `makemigrations` dan `migrate`
+
+`python manage.py makemigrations` membaca perubahan pada model dan membuat file migrasi sebagai catatan perubahan struktur database.
+
+`python manage.py migrate` menerapkan file migrasi tersebut ke database sehingga perubahan benar-benar dibuat atau diubah pada tabel database.
+
+Contohnya, ketika model `Education` ditambahkan, prosesnya adalah membuat migrasi terlebih dahulu dengan `makemigrations`, kemudian menerapkannya menggunakan `migrate`.
+
+### Fitur Tambahan Tugas 2 — Download PDF
+
+Saya menambahkan fitur **Download PDF** untuk mengunduh ringkasan Experience dan Education.
+
+Alurnya adalah sebagai berikut:
+
+1. Pengguna memilih `Download PDF` pada navbar.
+2. Request masuk ke view `download_portfolio_pdf`.
+3. View mengambil data Experience dan Education.
+4. Data dirender menggunakan `portfolio_pdf.html`.
+5. HTML dikonversi menjadi PDF menggunakan `xhtml2pdf`.
+6. PDF dikembalikan sebagai `HttpResponse` dengan `Content-Disposition: attachment`.
+
+Template PDF tidak melakukan `extends` dari `base.html` karena PDF dirender oleh library `xhtml2pdf`, bukan sebagai halaman web biasa.
+
+---
+
+### Tugas 3
+
+## Tujuan
+
+Tugas 3 berfokus pada dua hal utama:
+
+1. **Refactoring template** menggunakan template inheritance agar struktur HTML yang sama tidak ditulis berulang.
+2. Penerapan mekanisme **Create, Update, Delete, dan JSON Data Delivery** untuk data portofolio.
+
+Pada tugas ini, **Education** digunakan sebagai bagian utama untuk memenuhi kebutuhan CRUD berbasis `ModelForm`. Pada versi akhir proyek, pola yang sama juga diterapkan pada **Experience** sehingga kedua bagian dapat dikelola secara dinamis.
+
+## Refactoring Template
+
+`templates/base.html` menjadi root template yang berisi skeleton dokumen HTML, navbar, dark-mode toggle, pemanggilan CSS/JavaScript, flash messages, dan footer.
+
+Template berikut menggunakan inheritance:
+
+- `templates/index.html`
+- `templates/experience.html`
+- `templates/education.html`
+- `templates/form_page.html`
+
+Pola yang digunakan adalah:
+
+```django
+{% extends "base.html" %}
+```
+
+Konten spesifik setiap halaman ditempatkan pada block seperti:
+
+```django
+{% block title %}...{% endblock title %}
+{% block content %}...{% endblock content %}
+```
+
+### Pengecualian
+
+`templates/portfolio_pdf.html` sengaja tidak melakukan `extends` dari `base.html`. Template tersebut memiliki struktur khusus untuk kebutuhan rendering PDF dengan `xhtml2pdf`, sehingga tidak identik dengan halaman web biasa.
+
+## ModelForm
+
+Untuk data Education, saya membuat `EducationForm` pada `main/forms.py` sebagai subclass `ModelForm`.
+
+Field model yang digunakan antara lain:
+
+```text
+nama_sekolah : CharField
+ tingkat    : CharField dengan choices
+jurusan      : CharField
+ tahun_masuk : PositiveIntegerField
+tahun_lulus  : PositiveIntegerField / nullable
+deskripsi    : TextField
+```
+
+`id` tidak dimasukkan ke dalam `Meta.fields` karena dibuat otomatis oleh model. Field yang berhubungan dengan timestamp juga tidak perlu diisi pengguna.
+
+Selain field model, form memiliki `secret` sebagai field tambahan untuk memverifikasi kode rahasia sebelum operasi tulis.
+
+`ExperienceForm` juga menggunakan `ModelForm` dan mengelola field `title`, `description`, `category`, serta `thumbnail`. Status selesai/berjalan direpresentasikan oleh checkbox `is_finished`, lalu diterjemahkan menjadi `ended_at` ketika form disimpan.
+
+## Create, Update, Delete
+
+### Education
+
+- Create: `/education/add/`
+- Update: `/education/<uuid>/edit/`
+- Delete: `/education/<uuid>/delete/`
+- List: `/education/`
+
+### Experience
+
+- Create: `/experience/add/`
+- Update: `/experience/<uuid>/edit/`
+- Delete: `/experience/<uuid>/delete/`
+- List: `/experience/`
+
+View form menggunakan pola **POST-Redirect-GET**. Request GET menampilkan form, sedangkan POST memvalidasi data lalu menyimpannya. Jika berhasil, pengguna diarahkan kembali ke halaman daftar dan mendapatkan flash message.
+
+## CSRF Protection
+
+Semua form yang mengubah data memakai:
+
+```django
+{% csrf_token %}
+```
+
+Hal ini penting agar request POST dari aplikasi memiliki token CSRF yang valid dan tidak mudah dipalsukan oleh situs lain. Form delete juga menggunakan CSRF token karena operasi penghapusan merupakan perubahan state.
+
+## JSON Data Delivery
+
+Data portofolio tersedia dalam format JSON melalui endpoint berikut:
+
+### Education
+
+```text
+GET /api/education/
+GET /api/education/<uuid>/
+```
+
+Filter nama sekolah dapat digunakan melalui query parameter:
+
+```text
+GET /api/education/?nama_sekolah=Universitas
+```
+
+### Experience
+
+```text
+GET /api/experience/
+GET /api/experience/<uuid>/
+```
+
+Filter judul dapat digunakan melalui query parameter:
+
+```text
+GET /api/experience/?title=Backend
+```
+
+View JSON menggunakan Django serializer, misalnya:
+
+```python
+serializers.serialize("json", queryset)
+```
+
+Response dikembalikan sebagai `application/json`.
+
+## Deserialisasi pada Halaman Web
+
+Halaman Education dan Experience tidak hanya mengambil queryset langsung untuk ditampilkan. View halaman memanggil endpoint JSON, kemudian melakukan deserialisasi kembali menjadi object model Django.
+
+Alurnya:
+
+```text
+Database
+   ↓
+Django ORM / QuerySet
+   ↓
+Serialization
+   ↓
+JSON Response
+   ↓
+Deserialization
+   ↓
+Model Instances
+   ↓
+Template
+   ↓
+HTML pada Browser
+```
+
+Pada kode, proses deserialisasi dilakukan melalui `serializers.deserialize("json", ...)` lalu object hasilnya diambil dari `item.object`.
+
+---
+
+#### Pertanyaan Reflektif
+
+### 1. Mengapa menggunakan `ModelForm` dan mengapa perlu `{% csrf_token %}`?
+
+`ModelForm` digunakan karena form berhubungan langsung dengan model Django. Dengan `ModelForm`, struktur field form dapat dibuat berdasarkan field pada model tanpa harus mendefinisikan ulang seluruh field secara manual di HTML. Django juga dapat menangani validasi tipe data, validasi field, error message, dan proses penyimpanan object ke database melalui `form.save()`.
+
+Pendekatan ini membuat kode lebih singkat, mengurangi duplikasi antara model dan form, serta menjaga agar aturan validasi yang diterapkan pada form tetap konsisten dengan struktur model. Pada proyek ini, `EducationForm` juga dapat digunakan untuk Create maupun Update dengan memberikan `instance` saat mengedit data.
+
+`{% csrf_token %}` diperlukan pada form yang melakukan perubahan data, terutama request POST. CSRF token membantu Django membedakan request yang benar-benar berasal dari sesi pengguna pada aplikasi dengan request palsu yang dikirim oleh situs lain. Tanpa token CSRF yang valid, middleware perlindungan CSRF Django dapat menolak request tersebut.
+
+### 2. Mengapa JSON lebih disukai daripada XML dalam banyak aplikasi web modern?
+
+JSON biasanya lebih disukai untuk API web modern karena sintaksnya relatif ringkas dan langsung merepresentasikan struktur data seperti object, array, string, number, boolean, dan `null`. Struktur tersebut juga sangat dekat dengan struktur data yang umum digunakan pada JavaScript dan banyak bahasa pemrograman modern.
+
+Dibandingkan XML, JSON biasanya membutuhkan lebih sedikit markup sehingga payload lebih ringan dan lebih mudah dibaca manusia. Parsing JSON juga umumnya sederhana untuk aplikasi web.
+
+XML tetap relevan untuk kebutuhan tertentu, terutama sistem yang memerlukan atribut, namespace, schema yang kompleks, atau kompatibilitas dengan sistem lama. Jadi, penggunaan JSON bukan berarti XML selalu lebih buruk; JSON lebih cocok untuk pola pertukaran data yang umum digunakan pada banyak aplikasi web modern.
+
+### 3. Apa alur view ketika mengembalikan data dalam bentuk JSON dan mengapa perlu serialization?
+
+Ketika pengguna mengakses endpoint, misalnya `/api/education/`, request pertama-tama masuk ke `portofolio/urls.py`, kemudian diteruskan ke `main/urls.py`. URL tersebut dipetakan ke `get_education_json`.
+
+View mengambil data `Education` menggunakan Django ORM. Setelah itu, queryset diserialisasi menggunakan Django serializer:
+
+```python
+serializers.serialize("json", education)
+```
+
+Hasil serialization berupa string JSON yang memuat informasi model, primary key, dan field-field data. String tersebut kemudian dikembalikan melalui `HttpResponse` dengan content type `application/json`.
+
+Pada halaman `/education/`, view `show_education` menggunakan response JSON tersebut, membaca isinya, lalu melakukan deserialisasi dengan `serializers.deserialize("json", ...)`. Object hasil deserialisasi diberikan ke template sehingga data yang ditampilkan melalui halaman web berasal dari jalur JSON yang sama.
+
+Serialization diperlukan karena object model Django dan QuerySet bukan format data yang bisa dikirim begitu saja sebagai JSON. Serialization mengubah object tersebut menjadi representasi data yang dapat ditransmisikan sebagai teks JSON dan dipahami oleh client atau proses lain.
+
+---
+
+# Struktur Project
+
+Struktur penting proyek saat ini:
 
 ```text
 myportofolio/
 ├── manage.py
-├── requirements.txt
 ├── README.md
+├── requirements.txt
+├── .env
+├── main/
+│   ├── forms.py
+│   ├── models.py
+│   ├── tests.py
+│   ├── urls.py
+│   ├── views.py
+│   └── migrations/
+├── portofolio/
+│   ├── settings.py
+│   └── urls.py
 ├── templates/
-│   └── index.html
-├── static/
-│   └── css/
-│       └── style.css
-└── ...
-````
+│   ├── base.html
+│   ├── index.html
+│   ├── experience.html
+│   ├── education.html
+│   ├── form_page.html
+│   ├── portfolio_pdf.html
+│   └── components/
+│       ├── delete_modal.html
+│       └── messages.html
+└── static/
+    ├── css/
+    │   └── style.css
+    ├── js/
+    │   └── live-search.js
+    └── img/
+        └── fotoAdriel.png
+```
 
-File utama yang digunakan untuk tampilan website:
+### Tanggung Jawab File Utama
 
-* `templates/index.html` digunakan untuk struktur dan konten halaman.
-* `static/css/style.css` digunakan untuk seluruh styling, responsive layout,
-  animation, dan Dark Mode.
+| File | Fungsi |
+|---|---|
+| `main/models.py` | Mendefinisikan model `Experience` dan `Education` |
+| `main/forms.py` | Mendefinisikan `ModelForm` dan validasi kode rahasia |
+| `main/views.py` | Menangani halaman, CRUD, JSON delivery, deserialisasi, dan PDF |
+| `main/urls.py` | Menghubungkan URL dengan view aplikasi `main` |
+| `portofolio/urls.py` | Root URL project dan `include()` ke aplikasi `main` |
+| `templates/base.html` | Root template untuk halaman web biasa |
+| `templates/form_page.html` | Template reusable untuk Create dan Update |
+| `templates/components/delete_modal.html` | Modal konfirmasi delete yang reusable |
+| `templates/portfolio_pdf.html` | Template khusus untuk rendering PDF |
+| `main/tests.py` | Pengujian view, form, JSON, CRUD, template inheritance, dan PDF |
 
-## Setup dan Menjalankan Project Secara Lokal
+---
 
-### 1. Clone atau Download Project
+# Teknologi yang Digunakan
 
-Clone repository atau download project, kemudian masuk ke direktori project:
+- Python
+- Django
+- SQLite untuk development/local database
+- HTML5
+- CSS3
+- Django Template Language (DTL)
+- Django ORM
+- Django ModelForm
+- JSON serialization/deserialization
+- JavaScript untuk live search
+- `xhtml2pdf` untuk export PDF
+- Gunicorn / WhiteNoise untuk kebutuhan deployment
+- PostgreSQL dependency untuk deployment/production environment
+
+---
+
+# Setup dan Menjalankan Project Secara Lokal
+
+## 1. Masuk ke direktori project
 
 ```bash
 cd myportofolio
 ```
 
-### 2. Membuat Virtual Environment
+## 2. Buat virtual environment
 
-Buat virtual environment dengan perintah:
+### Windows
 
 ```bash
 python -m venv env
-```
-
-Aktifkan virtual environment.
-
-**Windows:**
-
-```bash
 env\Scripts\activate
 ```
 
-### 3. Install Dependencies
+### macOS / Linux
 
-Install dependencies yang diperlukan menggunakan:
+```bash
+python3 -m venv env
+source env/bin/activate
+```
+
+## 3. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Menjalankan Development Server
+## 4. Siapkan environment variable
 
-Jalankan Django development server dengan:
+Buat file `.env` di root project. Jangan memasukkan secret asli ke repository publik.
+
+Contoh:
+
+```env
+PORTFOLIO_SECRET=ganti_dengan_kode_rahasia_sendiri
+```
+
+`PORTFOLIO_SECRET` digunakan untuk melindungi operasi Create, Update, dan Delete pada data portofolio.
+
+## 5. Jalankan migrasi database
 
 ```bash
-python manage.py runserver
-```
-
-Jika berhasil, terminal akan menampilkan alamat development server:
-
-```text
-Starting development server at http://127.0.0.1:8000/
-```
-
-Buka alamat tersebut pada browser untuk melihat website portofolio.
-
-## Deployment
-
-Project ini juga telah di-deploy menggunakan **Pacil Web Service (PWS)** yang
-disediakan oleh fakultas.
-
-Pacil Web Service digunakan untuk menjalankan project secara online dan menghasilkan
-link yang dapat digunakan untuk mengakses website portofolio.
-
-### Deployment Status
-
-**Status:** Running
-
-### Deployment URL
-
-Masukkan link website hasil deployment PWS di bawah ini:
-
-**Website:** [MASUKKAN LINK WEBSITE PWS DI SINI]
-
-## Pertanyaan Reflektif
-
-### 1. Penggunaan Elemen Semantik HTML5
-
-Ya, saya menggunakan elemen semantik HTML5 seperti `<section>` dan `<aside>` dalam
-merancang struktur halaman portofolio. Pada halaman About Me, saya menggunakan
-`<section>` untuk mengelompokkan konten yang memiliki tema tertentu. Pada
-pengembangan tugas ini, saya juga menggunakan `<aside>` untuk bagian Skills yang
-berfungsi sebagai informasi tambahan yang masih berkaitan dengan konten utama.
-
-Penggunaan elemen semantik membantu saya membuat struktur HTML yang lebih jelas dan
-terorganisasi. Selain membuat kode lebih mudah dipahami, struktur tersebut juga
-memudahkan saya dalam mengatur layout menggunakan CSS Grid dan menentukan hubungan
-antara bagian About Me dan Skills.
-
-### 2. Tantangan Responsive Layout
-
-Tantangan utama yang saya temukan ketika membuat website responsive adalah
-mempertahankan layout agar tetap rapi ketika ukuran layar berubah. Pada desktop,
-bagian About Me dan Skills dapat ditampilkan berdampingan menggunakan CSS Grid.
-Namun, jika ukuran layar terlalu kecil, kedua bagian tersebut menjadi terlalu sempit.
-
-Untuk mengatasinya, saya menggunakan media queries. Pada ukuran layar yang lebih
-kecil, layout diubah dari dua kolom menjadi satu kolom sehingga konten dapat
-ditampilkan secara vertikal dan tetap mudah dibaca.
-
-Saya menentukan elemen yang perlu diprioritaskan berdasarkan hierarki informasi.
-Informasi utama seperti nama, foto, dan bio tetap diprioritaskan, sedangkan Skills
-dapat ditempatkan setelah informasi utama pada tampilan mobile. Saya juga
-menyesuaikan ukuran foto dan spacing agar tidak mengambil terlalu banyak ruang.
-
-### 3. Batasan Static Web dan Pengembangan Selanjutnya
-
-Karena website saat ini masih berupa static web, informasi seperti Skills, bio,
-dan informasi portofolio masih ditulis secara langsung di dalam HTML. Hal ini
-menjadi kurang praktis jika jumlah informasi semakin banyak karena setiap perubahan
-harus dilakukan secara manual pada kode.
-
-Pada iterasi berikutnya, saya ingin menambahkan fungsionalitas dinamis menggunakan
-database. Data seperti Projects, Skills, Experience, dan Education dapat disimpan
-di database sehingga informasi dapat ditambahkan atau diubah tanpa harus mengubah
-HTML secara manual.
-
-Saya juga ingin menerapkan arsitektur Django MVT. Model dapat digunakan untuk
-mengelola data portofolio, View untuk mengambil dan mengatur data, sedangkan
-Template digunakan untuk menampilkan data tersebut secara dinamis.
-
-## AI Disclosure
-
-Dalam pengerjaan tugas ini, saya menggunakan Claude AI sebagai alat bantu untuk berdiskusi
-dan memperoleh masukan mengenai pengembangan website, khususnya terkait struktur
-HTML5, responsive CSS, layout menggunakan Flexbox dan Grid, serta implementasi
-Dark Mode.
-
-AI digunakan sebagai bantuan dalam memahami konsep, memberikan saran perbaikan
-kode, dan membantu proses debugging. Implementasi akhir tetap saya sesuaikan
-dengan kebutuhan project dan saya terapkan pada kode project saya sendiri.
-
-
-### Tugas 2
-
-## Deskripsi Proyek
-
-Proyek ini merupakan aplikasi web portofolio pribadi yang dibangun menggunakan framework Django dengan menerapkan arsitektur Model-View-Template (MVT). Aplikasi ini dirancang secara khusus untuk menampilkan daftar riwayat pendidikan (education) secara dinamis yang diambil langsung dari database.
-
-Melalui aplikasi ini, pengguna dapat melihat berbagai informasi riwayat pendidikan, seperti nama instansi/lembaga pendidikan, tingkat pendidikan, periode tahun studi, jurusan/program studi, serta deskripsi atau pencapaian terkait yang dikelola secara terpusat melalui backend Django.
-
-## Instruksi Setup 
-
-Ikuti langkah-langkah berikut untuk menjalankan proyek ini di lingkungan lokal Anda:
-
-1. Prasyarat
-Pastikan Anda telah menginstal Python 3.x dan Git di komputer Anda.
-
-2. Kloning Repositori & Masuk ke Direktori
-Bash
-git clone <URL_REPOSITORI_ANDA>
-cd <NAMA_FOLDER_PROYEK>
-
-3. Membuat dan Mengaktifkan Virtual Environment
-Windows:
-Bash
-python -m venv venv
-venv\Scripts\activate
-
-macOS / Linux:
-Bash
-python3 -m venv venv
-source venv/bin/activate
-
-4. Menginstal Dependencies
-Bash
-pip install -r requirements.txt
-(Catatan: Jika berkas requirements.txt belum ada, Anda dapat menginstal Django secara langsung menggunakan perintah pip install django)
-
-5. Melakukan Migrasi Database
-Bash
 python manage.py makemigrations
 python manage.py migrate
+```
 
-6. Menjalankan Server Lokal
-Bash
+Jika repository sudah memiliki migration files dan tidak ada perubahan model, `makemigrations` biasanya tidak menghasilkan migrasi baru; `migrate` tetap digunakan untuk memastikan database mengikuti migration history.
+
+## 6. Jalankan test
+
+```bash
+python manage.py test
+```
+
+Test suite mencakup, antara lain:
+
+- halaman utama dan halaman Experience/Education
+- template inheritance
+- keberadaan satu skeleton HTML
+- JSON endpoint dan filter
+- serialization/deserialization
+- Create/Update/Delete
+- validasi form
+- CSRF-protected POST flow
+- flash message
+- PDF response dan link download
+
+## 7. Jalankan development server
+
+```bash
 python manage.py runserver
+```
 
-7. Mengakses Aplikasi
-Buka browser Anda dan akses alamat berikut:
+Kemudian buka:
+
+```text
 http://localhost:8000/
+```
 
-## Pertanyaan Reflektif
+---
 
-### 1. Jelaskan alur yang terjadi ketika pengguna membuka halaman portofolio baru, mulai dari permintaan yang diterima proyek hingga data ditampilkan pada browser. Dalam jawabanmu, jelaskan peran urls.py proyek, urls.py aplikasi, view, model, dan template.
+# Verifikasi Fitur Tugas 3
 
-Browser mengirimkan HTTP Request: Pengguna mengakses URL riwayat pendidikan (misalnya /education/), kemudian browser mengirimkan permintaan tersebut ke server Django.
+Sebelum submission, lakukan checklist berikut pada local server:
 
-Pengecekan di urls.py Proyek (Root): Server mengarahkan permintaan ke berkas konfigurasi URL utama. Berkas ini menggunakan fungsi include() untuk meneruskan rute ke aplikasi yang spesifik.
+### Template
 
-Pencocokan di urls.py Aplikasi: Django mencari pola URL yang cocok (misal 'education/') dan menemukan fungsi atau kelas View yang ditugaskan untuk menangani rute tersebut.
+- [ ] `/` dapat dibuka
+- [ ] `/experience/` dapat dibuka
+- [ ] `/education/` dapat dibuka
+- [ ] Halaman form Create/Update menggunakan `base.html`
+- [ ] Navbar dan Dark Mode tetap muncul konsisten
+- [ ] `portfolio_pdf.html` tetap standalone
 
-Pemrosesan oleh View (views.py): View bertindak sebagai pusat kendali. View menerima request tersebut dan menjalankan logika bisnis, termasuk meminta data riwayat pendidikan ke Model.
+### Education CRUD
 
-Pengambilan Data oleh Model (models.py): Jika interface membutuhkan data dinamis, View akan memanggil Model. Model kemudian mengambil data riwayat pendidikan dari database menggunakan Django ORM dan mengembalikannya ke View dalam bentuk QuerySet.
+- [ ] Klik **Tambah Pendidikan**
+- [ ] Isi form dan kode rahasia yang benar
+- [ ] Pastikan data muncul pada halaman Education
+- [ ] Ubah data menggunakan tombol Ubah
+- [ ] Hapus data melalui tombol Hapus
+- [ ] Coba kode rahasia salah dan pastikan data tidak terhapus
 
-Rendering Template (.html): View menyusun data dari Model ke dalam objek context, lalu menggabungkannya dengan berkas Template. Template memproses tag DTL (Django Template Language) untuk menyisipkan data dinamis ke dalam kerangka HTML.
+### Experience CRUD
 
-Pengembalian HTTP Response: View mengemas kode HTML yang sudah final menjadi HTTP Response dan mengirimkannya kembali ke browser pengguna untuk dirender menjadi halaman web visual.
+- [ ] Tambah Experience
+- [ ] Ubah Experience
+- [ ] Hapus Experience
+- [ ] Uji status ongoing/finished
 
-### 2. Mengapa data untuk bagian portofolio baru sebaiknya disimpan pada model dan tidak ditulis langsung di dalam template? Jelaskan dampaknya terhadap kemudahan pemeliharaan dan pengembangan aplikasi.
+### JSON
 
-Pusat Pengelolaan Data Terpusat: Penambahan, pembaruan, atau penghapusan data portofolio dapat dilakukan dengan mudah melalui interface Django Admin tanpa perlu mengedit berkas HTML satu per satu.
+- [ ] Buka `/api/education/`
+- [ ] Buka `/api/experience/`
+- [ ] Uji endpoint detail menggunakan UUID
+- [ ] Uji filter query parameter
+- [ ] Pastikan response memiliki `Content-Type: application/json`
+- [ ] Pastikan halaman HTML tetap menampilkan data melalui proses deserialisasi JSON
 
-Mencegah Kerusakan Tampilan: Mengedit berkas HTML secara manual berisiko merusak struktur, CSS, atau tata letak (layout). Pemisahan data dan tampilan menjaga integritas kode interface.
+---
 
-Kemudahan Ekspansi (Scalability): Data di Model dapat dengan mudah diurutkan, disaring berdasarkan kategori, atau dipaginasi menggunakan fitur bawaan Django ORM. Hal ini sangat sulit atau mustahil dilakukan secara efisien jika data di-hardcode.
+# Catatan Implementasi dan Keputusan Desain
 
-Penggunaan Kembali Data (Reusability): Data yang sama dapat ditampilkan di berbagai bagian situs (misalnya ringkasan di beranda dan rincian di halaman detail) tanpa harus menulis ulang kontennya.
+## 1. Reusable Form Template
 
-### 3. Apa perbedaan fungsi makemigrations dan migrate pada Django? Berikan contoh perubahan model yang mengharuskanmu menjalankan kedua perintah tersebut.
+`form_page.html` dibuat sebagai template reusable untuk Create dan Update. View hanya mengirim context seperti `form`, `heading`, `submit_label`, dan `cancel_url`, sehingga tidak diperlukan file HTML form terpisah untuk setiap operasi.
 
-Perintah: python manage.py makemigrations
+## 2. Reusable Delete Component
 
-Fungsi Utama: Berfungsi memindai perubahan yang saya tulis di dalam berkas models.py dan membuat skema/rencana perubahan (blueprint).
+`components/delete_modal.html` digunakan oleh Experience dan Education. Komponen menerima parameter seperti `item_id`, `item_label`, `delete_url`, dan `noun` sehingga dapat dipakai untuk beberapa jenis data.
 
-Output: Menghasilkan berkas Python baru di dalam folder migrations/ (misalnya 0002_education.py).
+## 3. Secret Code untuk Operasi Tulis
 
-Status Database: Pada tahap ini, struktur tabel di dalam database fisik belum berubah sama sekali.
+Karena situs portofolio dapat diakses publik, operasi tulis diberi proteksi tambahan menggunakan `PORTFOLIO_SECRET`. Kode rahasia tidak ditulis langsung pada template dan diambil dari environment variable.
 
-Perintah: python manage.py migrate
+Form menggunakan `SecretCodeField`, sedangkan delete menggunakan `SecretCodeForm`. Perbandingan secret menggunakan `hmac.compare_digest` dan konfigurasi dibuat fail closed ketika secret tidak tersedia.
 
-Fungsi Utama: Berfungsi membaca skrip migrasi yang telah dibuat dan menerapkannya langsung ke dalam sistem database.
+Fitur ini merupakan pengamanan tambahan untuk proyek pembelajaran dan bukan pengganti sistem autentikasi/otorisasi pengguna yang lengkap.
 
-Output: Mengeksekusi perintah SQL (seperti CREATE TABLE atau ALTER TABLE) ke dalam database (misalnya db.sqlite3).
+## 4. POST-Redirect-GET
 
-Status Database: Struktur tabel pada database fisik telah resmi berubah dan siap menyimpan data.
+Setelah POST yang berhasil, view melakukan redirect ke halaman daftar. Pola ini mencegah resubmission ketika pengguna melakukan refresh pada browser dan sekaligus membuat hasil aksi lebih mudah dipahami.
 
-Contoh Siklus Penggunaan:
-Saat saya menambahkan kelas Education baru di models.py, saya pertama-tama menjalankan python manage.py makemigrations untuk membuat riwayat rancangannya. Setelah berkas rancangan muncul, saya menjalankan python manage.py migrate agar Django benar-benar membuatkan tabel main_education di dalam database SQL saya.
+---
 
-## Fitur Tambahan
+Fitur Ekstra: Live Search
 
-Untuk memenuhi nilai skala 4 pada rubrik penilaian Fungsionalitas % Kesesuaian Topik, saya menambahkan fitur tambahan sebagai berikut:
+Selain fitur wajib pada Tugas 3, proyek ini memiliki fitur tambahan berupa Live Search pada halaman Experience dan Education. Fitur ini memungkinkan pengguna mencari data secara langsung berdasarkan kata kunci tanpa harus melakukan reload halaman secara penuh.
 
-Saya menambahkan fitur untuk mengunduh ringkasan portofolio (bagian Experience dan Education) secara langsung dalam format PDF dari website, tanpa perlu screenshot atau print manual dari browser.
+Cara Kerja
 
-Fitur ini bekerja sepenuhnya di sisi server (server-side rendering). Ketika pengguna mengklik tautan "Download PDF" pada navbar, request akan diarahkan ke view baru download_portfolio_pdf di main/views.py. View ini mengambil seluruh data Experience dan Education dari database, lalu merender data tersebut ke dalam template HTML khusus (templates/portfolio_pdf.html) yang berbeda dari template halaman biasa dan dirancang khusus agar sesuai dengan kemampuan rendering PDF. Hasil render HTML tersebut kemudian dikonversi menjadi berkas PDF menggunakan library xhtml2pdf, dan dikirim kembali sebagai HttpResponse dengan header Content-Disposition: attachment, sehingga browser langsung mengunduh file portfolio-adriel.pdf alih-alih menampilkannya di layar.
+Pada halaman Experience, pengguna dapat mencari pengalaman berdasarkan judul melalui parameter title, sedangkan pada halaman **Education, pencarian dilakukan berdasarkan nama sekolah melalui parameter nama_sekolah`.
 
-Untuk menambahkan fitur ini, langkah-langkah yang saya lakukan meliputi:
+Ketika pengguna mengetik pada kolom pencarian, JavaScript pada static/js/live-search.js akan menangkap event input. Pencarian tidak langsung dikirim untuk setiap karakter, tetapi menggunakan teknik debouncing selama 250 ms. Hal ini mengurangi jumlah request yang dikirim ke server ketika pengguna masih mengetik.
 
-Menambahkan library xhtml2pdf ke requirements.txt dan menginstalnya melalui pip install xhtml2pdf.
-Membuat view baru download_portfolio_pdf yang mengambil data dari model Experience dan Education, merendernya ke string HTML menggunakan render_to_string, lalu mengonversinya menjadi PDF melalui pisa.pisaDocument.
-Membuat template baru templates/portfolio_pdf.html dengan CSS yang ditulis inline (bukan file eksternal), karena xhtml2pdf tidak dapat memuat berkas CSS dari luar template.
-Mendaftarkan route baru portfolio/pdf/ dengan nama main:download_portfolio_pdf pada main/urls.py.
-Menambahkan tautan "Download PDF" pada navbar di seluruh halaman (index.html, experience.html, education.html) menggunakan tag {% url %} agar konsisten dan tidak melakukan hardcoded URL.
-Menambahkan unit test baru (PortfolioPdfTest) untuk memastikan endpoint dapat diakses dan mengembalikan berkas PDF yang valid, tetap berfungsi ketika data kosong, dan tautan download tersedia di seluruh halaman navbar.
+Setelah jeda tersebut selesai, JavaScript mengirim request GET menggunakan fetch() ke URL halaman dengan query parameter yang sesuai. Server Django kemudian memproses query tersebut menggunakan filter icontains, sehingga pencarian tidak harus sama persis dengan teks yang tersimpan di database.
 
-Dengan fitur ini, calon perekrut atau siapa pun yang mengunjungi portofolio dapat langsung mengunduh ringkasan riwayat pendidikan dan pengalaman saya dalam satu berkas PDF, tanpa harus membuka setiap halaman satu per satu.
+Sebagai contoh:
 
-## AI Disclosure
-Dalam pengerjaan tugas ini, saya menggunakan Claude AI sebagai alat bantu untuk berdiskusi dan memperoleh masukan mengenai pengembangan backend berbasis Django. Bantuan ini khususnya terkait pemahaman arsitektur Model-View-Template (MVT), alur request-response HTTP, manajemen migrasi database, dan logika implementasi fitur tambahan pengunduhan PDF.
+/experience/?title=organisasi
 
-AI digunakan sebagai bantuan dalam memahami konsep, memberikan saran perbaikan
-kode, dan membantu proses debugging. Implementasi akhir tetap saya sesuaikan
-dengan kebutuhan project dan saya terapkan pada kode project saya sendiri.
+atau:
+
+/education/?nama_sekolah=universitas
+
+View Django kemudian mengambil data yang sesuai dan merender halaman berdasarkan hasil pencarian. JavaScript membaca kembali HTML tersebut, mengambil bagian grid hasil pencarian, kemudian mengganti isi grid pada halaman yang sedang dibuka. Dengan demikian, daftar hasil dapat diperbarui tanpa melakukan full page reload.
+
+## Fitur Ekstra: Live Search
+
+Selain fitur wajib pada Tugas 3, proyek ini memiliki fitur tambahan berupa **Live Search** pada halaman **Experience** dan **Education**. Fitur ini memungkinkan pengguna mencari data secara langsung berdasarkan kata kunci tanpa harus melakukan reload halaman secara penuh.
+
+### Cara Kerja
+
+Pada halaman **Experience**, pengguna dapat mencari pengalaman berdasarkan judul melalui parameter `title`, sedangkan pada halaman **Education`, pencarian dilakukan berdasarkan nama sekolah melalui parameter `nama_sekolah`.
+
+Ketika pengguna mengetik pada kolom pencarian, JavaScript pada `static/js/live-search.js` akan menangkap event `input`. Pencarian tidak langsung dikirim untuk setiap karakter, tetapi menggunakan teknik **debouncing selama 250 ms**. Hal ini mengurangi jumlah request yang dikirim ke server ketika pengguna masih mengetik.
+
+Setelah jeda tersebut selesai, JavaScript mengirim request `GET` menggunakan `fetch()` ke URL halaman dengan query parameter yang sesuai. Server Django kemudian memproses query tersebut menggunakan filter `icontains`, sehingga pencarian tidak harus sama persis dengan teks yang tersimpan di database.
+
+Sebagai contoh:
+
+```text
+/experience/?title=organisasi
+```
+
+atau:
+
+```text
+/education/?nama_sekolah=universitas
+```
+
+View Django kemudian mengambil data yang sesuai dan merender halaman berdasarkan hasil pencarian. JavaScript membaca kembali HTML tersebut, mengambil bagian grid hasil pencarian, kemudian mengganti isi grid pada halaman yang sedang dibuka. Dengan demikian, daftar hasil dapat diperbarui tanpa melakukan full page reload.
+
+### Optimasi dan Penanganan Request
+
+Implementasi Live Search memiliki beberapa mekanisme tambahan:
+
+* **Debouncing 250 ms** untuk mengurangi request yang terlalu sering ketika pengguna mengetik.
+* **`AbortController`** untuk membatalkan request sebelumnya apabila pengguna sudah mengetik kata kunci baru.
+* **Request ID** untuk memastikan response dari request lama tidak menimpa hasil pencarian yang lebih baru.
+* **`history.replaceState()`** untuk memperbarui query parameter pada URL tanpa melakukan reload halaman.
+* Atribut **`aria-busy`** digunakan ketika request sedang diproses agar status loading dapat dikenali oleh teknologi bantu.
+
+### Mengapa Fitur Ini Ditambahkan?
+
+Fitur Live Search ditambahkan untuk meningkatkan **usability** portofolio. Pengguna tidak perlu menekan tombol atau memuat ulang seluruh halaman setiap kali ingin mencari data. Fitur ini juga menunjukkan penggunaan JavaScript dan komunikasi asynchronous antara browser dengan server Django dalam proyek.
+
+Fitur ini bersifat **tambahan (extra feature)** dan tidak menggantikan requirement utama Tugas 3 seperti Create, Update, Delete, ModelForm, dan JSON Data Delivery.
+
+# AI Disclosure
+
+## Tools yang Digunakan
+
+Dalam pengerjaan proyek selama semester, saya menggunakan AI sebagai alat bantu belajar, brainstorming, debugging, review, dan penyusunan dokumentasi , bukan sebagai pengganti proses memahami dan memverifikasi kode.
+
+Tool yang saya gunakan:
+
+- Claude AI — terutama untuk berdiskusi mengenai struktur HTML/CSS dan pengembangan Django pada tahap awal.
+- ChatGPT — digunakan untuk debugging, menjelaskan error, mengecek implementasi Django dan membandingkan kode sebelum/sesudah.
+
+## Strategi Prompting
+
+Saya biasanya memberikan konteks terlebih dahulu, kemudian meminta AI melakukan tugas yang spesifik. Contoh strategi yang digunakan:
+
+1. Context-first — menyertakan potongan kode, traceback/error, struktur file, atau instruksi tugas.
+2. Constraint-aware — meminta solusi tetap sesuai materi yang sedang dipelajari dan tidak menambahkan teknologi yang belum diperlukan.
+3. Step-by-step debugging** — meminta AI menjelaskan sumber error, file yang terlibat, dan perubahan minimal yang diperlukan.
+4. Verification — meminta checklist atau test case agar hasil implementasi dapat diperiksa kembali secara manual.
+5. Refinement — setelah solusi awal diberikan, kode disesuaikan kembali dengan struktur proyek, style, dan kebutuhan tugas.
+
+## Bagian yang Dibantu AI
+
+AI membantu saya terutama pada:
+
+- review dan perbaikan struktur HTML/CSS pada Tugas 1
+- pemahaman alur Django MVT pada Tugas 2
+- debugging routing dan URL namespacing Django
+- penjelasan konsep `ModelForm`, CSRF, migration, serialization, dan deserialization
+- saran refactoring template menjadi `base.html` + `{% extends %}`
+- ide struktur CRUD dan reusable form template
+- review test case dan edge case
+- penyusunan dokumentasi dan pertanyaan reflektif pada Tugas 3
+
+Kode final tetap saya tinjau, sesuaikan, dan jalankan sendiri agar kompatibel dengan project saya.
+
+## Contoh Log Prompting
+
+| Tahap | Kebutuhan | Ringkasan Prompt | Hasil yang Dipakai |
+|---|---|---|---|
+| Tugas 1 | HTML/CSS | Meminta review struktur semantic HTML, responsive layout, CSS Grid/Flexbox, dan Dark Mode | Saran struktur dan styling |
+| Tugas 2 | Django MVT | Meminta penjelasan request-response serta hubungan `urls.py`, view, model, dan template | Pemahaman konsep + dokumentasi |
+| Debugging | URL namespace | Menyertakan traceback `NoReverseMatch` dan meminta diagnosis sumber namespace | Koreksi routing/reverse URL |
+| Tugas 3 | Refactoring | Meminta cara mengubah halaman yang memiliki skeleton sama menjadi `{% extends "base.html" %}` | Struktur `base.html` dan child templates |
+| Tugas 3 | CRUD/JSON | Menyertakan requirement tugas dan kode sebelum/sesudah untuk direview | Review implementasi CRUD, JSON, dan deserialisasi |
+| Tugas 3 | README | Meminta penyusunan README yang memenuhi rubrik, termasuk refleksi dan AI disclosure | Dokumentasi mingguan dan refleksi |
+
+## Keterbatasan AI dan Perbaikan Manual
+
+AI sangat membantu untuk menghasilkan kemungkinan solusi dengan cepat, tetapi saran AI tidak selalu langsung cocok dengan project. Beberapa keterbatasan yang saya temui adalah:
+
+- AI dapat menyarankan kode yang tidak sesuai dengan nama route, struktur folder, atau versi Django yang digunakan.
+- AI dapat memberikan solusi yang terlalu kompleks dibandingkan kebutuhan tugas.
+- Penjelasan AI dapat terlihat masuk akal tetapi tetap perlu diverifikasi terhadap kode aktual, traceback, dokumentasi, dan hasil runtime.
+- Contoh kode dari AI tidak otomatis menjamin bahwa seluruh halaman memiliki context, URL namespace, atau dependency yang benar.
+
+Karena itu, saya melakukan perbaikan manual dengan mengecek file yang benar-benar digunakan project, mencocokkan nama URL namespace seperti `main:...`, menyesuaikan reusable template dengan CSS yang sudah ada, dan mempertahankan `portfolio_pdf.html` sebagai template standalone karena kebutuhan rendering PDF berbeda dari halaman browser. Salah satu masalah yang saya temui adalah error `NoReverseMatch` karena namespace `main` belum terdaftar dengan benar; saya telusuri konfigurasi root/app URL dan pemanggilan `{% url %}` sampai referensinya konsisten.
+
+Saya juga menambahkan dan meninjau test untuk memastikan fitur tidak hanya terlihat benar secara visual, tetapi juga bekerja secara fungsional, termasuk pengujian JSON endpoint, CRUD, form validation, template inheritance, flash message, dan PDF.
