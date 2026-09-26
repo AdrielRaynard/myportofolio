@@ -7,21 +7,23 @@ Struktur berkas:
     4. Education           : halaman + JSON Data Delivery + Create/Update/Delete.
     5. Portfolio PDF       : unduh ringkasan portofolio.
 """
-
+import datetime
 from io import BytesIO
-
 from django.contrib import messages
 from django.core import serializers
-
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_POST, require_safe
 from xhtml2pdf import pisa
-
 from main.forms import EducationForm, ExperienceForm, SecretCodeForm
 from main.models import Education, Experience
+from django.contrib.auth import login, logout
+from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.shortcuts import redirect, render
+from django.contrib.auth.decorators import login_required  
+from django.core.exceptions import PermissionDenied        
 
 OWNER_NAME = "Adriel"
 
@@ -38,7 +40,11 @@ def _page_context(**extra):
 def _json_response(objects):
     """Serialisasi model instance / queryset menjadi respons `application/json`."""
     return HttpResponse(
-        serializers.serialize("json", objects),
+        serializers.serialize(
+            "json",
+            objects,
+            use_natural_foreign_keys=True
+        ),
         content_type="application/json",
     )
 
@@ -115,15 +121,17 @@ def _delete_with_secret(request, instance, *, success_url, success_message):
 # ---------------------------------------------------------------------------
 
 def show_main(request):
-    context = _page_context(
-        npm="2506587150",
-        study_program="S1 Sistem Informasi",
-        bio=(
-            "Mahasiswa Sistem Informasi Universitas Indonesia yang tertarik "
-            "pada pengembangan perangkat lunak dan pendidikan."
+    last_login = request.COOKIES.get('last_login', 'Belum ada sesi login / Cookie tidak ditemukan')
+    context = {
+        "name": "Adriel",
+        "npm": "2506587150",
+        "study_program": "S1 Sistem Informasi",
+        "bio": (
+            "Mahasiswa Fakultas Ilmu Komputer Universitas Indonesia yang tertarik "
+            "pada pengembangan perangkat lunak dan bisnis."
         ),
-    )
-
+        "last_login": last_login,
+    }
     return render(request, "index.html", context)
 
 # ---------------------------------------------------------------------------
@@ -228,7 +236,10 @@ def show_education(request):
     )
     return render(request, "education.html", context)
 
+@login_required(login_url="/login/")
 def create_education(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
     return _form_view(
         request,
         EducationForm,
@@ -287,3 +298,54 @@ def download_portfolio_pdf(request):
     response = HttpResponse(result.getvalue(), content_type="application/pdf")
     response["Content-Disposition"] = 'attachment; filename="portfolio-adriel.pdf"'
     return response
+
+def register(request):
+    form = UserCreationForm(request.POST or None)
+
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Akun berhasil dibuat. Silakan login.")
+        return redirect("main:login")
+
+    context = {
+        "name": "Adriel",
+        "form": form,
+    }
+    return render(request, "register.html", context)
+
+def login_user(request):
+    form = AuthenticationForm(request, data=request.POST or None)
+
+    if request.method == "POST" and form.is_valid():
+        user = form.get_user()
+        login(request, user)
+        response = redirect("main:show_main")
+        response.set_cookie('last_login', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        return response
+
+    context = {
+        "name": "Adriel",
+        "form": form,
+    }
+    return render(request, "login.html", context)
+
+def logout_user(request):
+    logout(request)
+    response = redirect("main:show_main")
+    response.delete_cookie('last_login')
+    return response
+
+# Tanpa cek is_superuser: semua akun yang sudah login boleh memberi star
+@login_required(login_url="/login/")
+def toggle_star(request, education_id):
+    education = get_object_or_404(Education, pk=education_id)
+
+    if request.method == "POST":
+        # Kalau akun ini sudah pernah memberi star, batalkan star-nya.
+        # Kalau belum, tambahkan star.
+        if request.user in education.starred_by.all():
+            education.starred_by.remove(request.user)
+        else:
+            education.starred_by.add(request.user)
+
+    return redirect("main:show_education")

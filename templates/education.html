@@ -10,12 +10,13 @@
 
                 <div class="section-header">
                     <h1>Education</h1>
-
+                {% if user.is_superuser %} 
                     <a href="{% url 'main:create_education' %}"
                        class="button add-button">
                         <span aria-hidden="true">+</span>
                         Tambah Pendidikan
                     </a>
+                {% endif %}  
                 </div>
 
                 <form method="get"
@@ -77,7 +78,10 @@
                                 </a>
 
                                 {% url 'main:delete_education' education.id as delete_url %}
+                                {% include "components/education_star.html" with education=education %}
+                            {% if user.is_superuser %}
                                 {% include "components/delete_modal.html" with item_id=education.id item_label=education.nama_sekolah delete_url=delete_url noun="riwayat pendidikan" %}
+                            {% endif %} 
                             </div>
                         </article>
                     {% empty %}

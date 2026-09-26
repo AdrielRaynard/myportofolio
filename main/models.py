@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from django.db import models
 
 import uuid
@@ -48,6 +49,9 @@ class Education(models.Model):
     tahun_masuk = models.PositiveIntegerField()
     tahun_lulus = models.PositiveIntegerField(blank=True, null=True)
     deskripsi = models.TextField(blank=True)
+    starred_by = models.ManyToManyField(
+        User, related_name="starred_projects", blank=True
+    )
 
     class Meta:
         ordering = ['-tahun_masuk']
