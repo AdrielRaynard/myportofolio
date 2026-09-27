@@ -1,56 +1,99 @@
-"""View untuk aplikasi `main` (portofolio pribadi).
+"""View untuk aplikasi `main` (portofolio pribadi)."""
 
-Struktur berkas:
-    1. Helper bersama      : konteks halaman, respons JSON, deserialisasi JSON.
-    2. Profile             : halaman utama.
-    3. Experience          : halaman + JSON Data Delivery + Create/Update/Delete.
-    4. Education           : halaman + JSON Data Delivery + Create/Update/Delete.
-    5. Portfolio PDF       : unduh ringkasan portofolio.
-"""
 import datetime
 from io import BytesIO
+
 from django.contrib import messages
+from django.contrib.auth import login, logout
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.core import serializers
+from django.core.exceptions import PermissionDenied
+from django.db.models import Count
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.views.decorators.http import require_POST, require_safe
 from xhtml2pdf import pisa
+
 from main.forms import EducationForm, ExperienceForm, SecretCodeForm
 from main.models import Education, Experience
-from django.contrib.auth import login, logout
-from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
-from django.shortcuts import redirect, render
-from django.contrib.auth.decorators import login_required  
-from django.core.exceptions import PermissionDenied        
 
 OWNER_NAME = "Adriel"
+EDITOR_GROUP_NAME = "Editor"
+
+# Field yang boleh keluar lewat endpoint JSON.
+# `starred_by` sengaja tidak diserialisasikan agar API tidak membocorkan
+# identitas/account ID pengguna yang memberi star.
+EXPERIENCE_JSON_FIELDS = [
+    "title",
+    "description",
+    "category",
+    "thumbnail",
+    "started_at",
+    "ended_at",
+]
+
+EDUCATION_JSON_FIELDS = [
+    "nama_sekolah",
+    "tingkat",
+    "jurusan",
+    "tahun_masuk",
+    "tahun_lulus",
+    "deskripsi",
+]
 
 
 # ---------------------------------------------------------------------------
-# Helper bersama
+# Helper authorization
 # ---------------------------------------------------------------------------
+
+def _is_editor(user):
+    """Return True jika user merupakan anggota group Editor."""
+    return (
+        user.is_authenticated
+        and user.groups.filter(name=EDITOR_GROUP_NAME).exists()
+    )
+
+
+def _require_owner(user):
+    """Hanya superuser/pemilik portfolio yang boleh create/delete."""
+    if not user.is_superuser:
+        raise PermissionDenied
+
+
+def _require_editor_or_owner(user):
+    """Editor dan superuser boleh update; user biasa tidak."""
+    if not (user.is_superuser or _is_editor(user)):
+        raise PermissionDenied
+
 
 def _page_context(**extra):
     """Konteks dasar yang dibutuhkan base.html, digabung dengan data halaman."""
     return {"name": OWNER_NAME, **extra}
 
 
-def _json_response(objects):
-    """Serialisasi model instance / queryset menjadi respons `application/json`."""
+# ---------------------------------------------------------------------------
+# Helper JSON
+# ---------------------------------------------------------------------------
+
+
+def _json_response(objects, fields):
+    """Serialisasi object/queryset ke JSON hanya dengan field yang diizinkan."""
     return HttpResponse(
         serializers.serialize(
             "json",
             objects,
-            use_natural_foreign_keys=True
+            fields=fields,
+            use_natural_foreign_keys=True,
         ),
         content_type="application/json",
     )
 
 
-def _json_detail_response(model, pk):
-    """Respons JSON untuk satu objek; 404 dalam bentuk JSON (bukan halaman HTML)."""
+def _json_detail_response(model, pk, fields):
+    """Respons JSON untuk satu objek; 404 tetap berbentuk JSON."""
     try:
         instance = model.objects.get(pk=pk)
     except model.DoesNotExist:
@@ -58,17 +101,41 @@ def _json_detail_response(model, pk):
             {"detail": f"{model._meta.verbose_name.title()} tidak ditemukan."},
             status=404,
         )
-    return _json_response([instance])
+    return _json_response([instance], fields)
 
 
 def _objects_from_json(json_response):
-    """Deserialisasi respons JSON kembali menjadi list model instance.
-
-    Halaman HTML memakai ini agar mengonsumsi data persis seperti klien API
-    (JSON -> objek Python), bukan langsung dari database.
-    """
+    """Deserialisasi respons JSON kembali menjadi list model instance."""
     payload = json_response.content.decode("utf-8")
     return [item.object for item in serializers.deserialize("json", payload)]
+
+
+def _attach_education_star_state(request, education_list):
+    """Tambahkan jumlah star dan status star user ke object hasil deserialisasi JSON."""
+    education_ids = [item.pk for item in education_list]
+
+    if not education_ids:
+        return
+
+    star_counts = dict(
+        Education.objects.filter(pk__in=education_ids)
+        .annotate(star_count=Count("starred_by"))
+        .values_list("pk", "star_count")
+    )
+
+    starred_ids = set()
+    if request.user.is_authenticated:
+        starred_ids = set(
+            Education.objects.filter(
+                pk__in=education_ids,
+                starred_by=request.user,
+            ).values_list("pk", flat=True)
+        )
+
+    for education in education_list:
+        education.star_count = star_counts.get(education.pk, 0)
+        education.user_has_starred = education.pk in starred_ids
+
 
 def _form_view(
     request,
@@ -81,12 +148,7 @@ def _form_view(
     success_url,
     success_message,
 ):
-    """View generik halaman Create/Update berbasis ModelForm (pola POST-Redirect-GET).
-
-    - GET            : tampilkan form (terisi data lama jika `instance` diberikan).
-    - POST valid     : simpan, tampilkan flash message, redirect ke `success_url`.
-    - POST tidak valid: render ulang form beserta pesan error tiap field.
-    """
+    """View generik halaman Create/Update berbasis ModelForm."""
     is_post = request.method == "POST"
     form = form_class(request.POST if is_post else None, instance=instance)
 
@@ -105,7 +167,7 @@ def _form_view(
 
 
 def _delete_with_secret(request, instance, *, success_url, success_message):
-    """Hapus `instance` hanya jika kode rahasia pada POST benar, lalu redirect."""
+    """Hapus instance hanya jika kode rahasia pada POST benar."""
     form = SecretCodeForm(request.POST)
 
     if form.is_valid():
@@ -116,14 +178,18 @@ def _delete_with_secret(request, instance, *, success_url, success_message):
 
     return redirect(success_url)
 
+
 # ---------------------------------------------------------------------------
 # Profile
 # ---------------------------------------------------------------------------
 
 def show_main(request):
-    last_login = request.COOKIES.get('last_login', 'Belum ada sesi login / Cookie tidak ditemukan')
+    last_login = request.COOKIES.get(
+        "last_login",
+        "Belum ada sesi login / Cookie tidak ditemukan",
+    )
     context = {
-        "name": "Adriel",
+        "name": OWNER_NAME,
         "npm": "2506587150",
         "study_program": "S1 Sistem Informasi",
         "bio": (
@@ -133,6 +199,7 @@ def show_main(request):
         "last_login": last_login,
     }
     return render(request, "index.html", context)
+
 
 # ---------------------------------------------------------------------------
 # Experience
@@ -147,17 +214,16 @@ def get_experience_json(request):
     if title_query:
         experiences = experiences.filter(title__icontains=title_query)
 
-    return _json_response(experiences)
+    return _json_response(experiences, EXPERIENCE_JSON_FIELDS)
 
 
 @require_safe
 def get_experience_detail_json(request, experience_id):
     """Satu pengalaman dalam JSON berdasarkan id (UUID)."""
-    return _json_detail_response(Experience, experience_id)
+    return _json_detail_response(Experience, experience_id, EXPERIENCE_JSON_FIELDS)
 
 
 @require_safe
-
 def show_experience(request):
     """Halaman Experience: data diambil dari JSON lalu dideserialisasi."""
     experiences = _objects_from_json(get_experience_json(request))
@@ -165,10 +231,14 @@ def show_experience(request):
     context = _page_context(
         experience_list=experiences,
         title_query=request.GET.get("title", "").strip(),
+        is_editor=_is_editor(request.user),
     )
     return render(request, "experience.html", context)
 
+
+@login_required(login_url="/login/")
 def create_experience(request):
+    _require_owner(request.user)
     return _form_view(
         request,
         ExperienceForm,
@@ -180,7 +250,9 @@ def create_experience(request):
     )
 
 
+@login_required(login_url="/login/")
 def update_experience(request, experience_id):
+    _require_editor_or_owner(request.user)
     experience = get_object_or_404(Experience, pk=experience_id)
     return _form_view(
         request,
@@ -194,8 +266,10 @@ def update_experience(request, experience_id):
     )
 
 
+@login_required(login_url="/login/")
 @require_POST
 def delete_experience(request, experience_id):
+    _require_owner(request.user)
     experience = get_object_or_404(Experience, pk=experience_id)
     return _delete_with_secret(
         request,
@@ -203,6 +277,7 @@ def delete_experience(request, experience_id):
         success_url="main:show_experience",
         success_message="Pengalaman berhasil dihapus!",
     )
+
 
 # ---------------------------------------------------------------------------
 # Education
@@ -217,29 +292,32 @@ def get_education_json(request):
     if nama_sekolah_query:
         education = education.filter(nama_sekolah__icontains=nama_sekolah_query)
 
-    return _json_response(education)
+    return _json_response(education, EDUCATION_JSON_FIELDS)
+
 
 @require_safe
 def get_education_detail_json(request, education_id):
     """Satu riwayat pendidikan dalam JSON berdasarkan id (UUID)."""
-    return _json_detail_response(Education, education_id)
+    return _json_detail_response(Education, education_id, EDUCATION_JSON_FIELDS)
 
 
 @require_safe
 def show_education(request):
     """Halaman Education: data diambil dari JSON lalu dideserialisasi."""
     education = _objects_from_json(get_education_json(request))
+    _attach_education_star_state(request, education)
 
     context = _page_context(
         education_list=education,
         nama_sekolah_query=request.GET.get("nama_sekolah", "").strip(),
+        is_editor=_is_editor(request.user),
     )
     return render(request, "education.html", context)
 
+
 @login_required(login_url="/login/")
 def create_education(request):
-    if not request.user.is_superuser:
-        raise PermissionDenied
+    _require_owner(request.user)
     return _form_view(
         request,
         EducationForm,
@@ -250,7 +328,10 @@ def create_education(request):
         success_message="Pendidikan baru berhasil ditambahkan!",
     )
 
+
+@login_required(login_url="/login/")
 def update_education(request, education_id):
+    _require_editor_or_owner(request.user)
     education = get_object_or_404(Education, pk=education_id)
     return _form_view(
         request,
@@ -263,8 +344,11 @@ def update_education(request, education_id):
         success_message="Riwayat pendidikan berhasil diperbarui!",
     )
 
+
+@login_required(login_url="/login/")
 @require_POST
 def delete_education(request, education_id):
+    _require_owner(request.user)
     education = get_object_or_404(Education, pk=education_id)
 
     return _delete_with_secret(
@@ -273,6 +357,7 @@ def delete_education(request, education_id):
         success_url="main:show_education",
         success_message="Riwayat pendidikan berhasil dihapus!",
     )
+
 
 # ---------------------------------------------------------------------------
 # Portfolio PDF
@@ -299,6 +384,11 @@ def download_portfolio_pdf(request):
     response["Content-Disposition"] = 'attachment; filename="portfolio-adriel.pdf"'
     return response
 
+
+# ---------------------------------------------------------------------------
+# Authentication
+# ---------------------------------------------------------------------------
+
 def register(request):
     form = UserCreationForm(request.POST or None)
 
@@ -308,10 +398,11 @@ def register(request):
         return redirect("main:login")
 
     context = {
-        "name": "Adriel",
+        "name": OWNER_NAME,
         "form": form,
     }
     return render(request, "register.html", context)
+
 
 def login_user(request):
     form = AuthenticationForm(request, data=request.POST or None)
@@ -320,32 +411,39 @@ def login_user(request):
         user = form.get_user()
         login(request, user)
         response = redirect("main:show_main")
-        response.set_cookie('last_login', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        response.set_cookie(
+            "last_login",
+            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        )
         return response
 
     context = {
-        "name": "Adriel",
+        "name": OWNER_NAME,
         "form": form,
     }
     return render(request, "login.html", context)
 
+
 def logout_user(request):
     logout(request)
     response = redirect("main:show_main")
-    response.delete_cookie('last_login')
+    response.delete_cookie("last_login")
     return response
 
-# Tanpa cek is_superuser: semua akun yang sudah login boleh memberi star
+
+# ---------------------------------------------------------------------------
+# Star
+# ---------------------------------------------------------------------------
+
 @login_required(login_url="/login/")
+@require_POST
 def toggle_star(request, education_id):
+    """Toggle satu star per user pada Education tertentu."""
     education = get_object_or_404(Education, pk=education_id)
 
-    if request.method == "POST":
-        # Kalau akun ini sudah pernah memberi star, batalkan star-nya.
-        # Kalau belum, tambahkan star.
-        if request.user in education.starred_by.all():
-            education.starred_by.remove(request.user)
-        else:
-            education.starred_by.add(request.user)
+    if education.starred_by.filter(pk=request.user.pk).exists():
+        education.starred_by.remove(request.user)
+    else:
+        education.starred_by.add(request.user)
 
     return redirect("main:show_education")
