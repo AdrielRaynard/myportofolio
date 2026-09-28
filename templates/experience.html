@@ -7,14 +7,16 @@
         <section class="experience-section" id="experience">
             <div class="container">
                 <p class="section-kicker">Perjalanan saya sejauh ini</p>
-                                <div class="section-header">
+                <div class="section-header">
                     <h1>Experience</h1>
 
-                    <a href="{% url 'main:create_experience' %}"
-                       class="button add-button">
-                        <span aria-hidden="true">+</span>
-                        Tambah Pengalaman
-                    </a>
+                    {% if user.is_superuser %}
+                        <a href="{% url 'main:create_experience' %}"
+                           class="button add-button">
+                            <span aria-hidden="true">+</span>
+                            Tambah Pengalaman
+                        </a>
+                    {% endif %}
                 </div>
 
                 <form method="get"
@@ -55,18 +57,25 @@
                                 <p class="experience-status">Selesai</p>
                             {% endif %}
 
+                            ```
+                        {% if user.is_superuser or is_editor %}
                             <div class="card-actions">
                                 <a href="{% url 'main:update_experience' experience.id %}"
-                                class="button button-secondary">
+                                   class="button button-secondary">
                                     Ubah
                                 </a>
 
-                                {% url 'main:delete_experience' experience.id as delete_url %}
-                                {% include "components/delete_modal.html" with item_id=experience.id item_label=experience.title delete_url=delete_url noun="pengalaman" %}
+                                {% if user.is_superuser %}
+                                    {% url 'main:delete_experience' experience.id as delete_url %}
+                                    {% include "components/delete_modal.html" with item_id=experience.id item_label=experience.title delete_url=delete_url noun="pengalaman" %}
+                                {% endif %}
                             </div>
-                            </article>
-                        {% empty %}
-                                {% if title_query %}
+                        {% endif %}
+                    </article>
+                {% empty %}
+                    {% if title_query %}
+```
+
 
                             <p class="empty-state">
                                 Tidak ada pengalaman dengan judul tersebut.
@@ -79,6 +88,6 @@
                     {% endfor %}
                 </div>
             </div>
-         </section>
+        </section>
     </main>
 {% endblock content %}
