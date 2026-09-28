@@ -1502,3 +1502,140 @@ class EditorUpdateWithoutSecretTest(TestCase):
             self.client.get(reverse("main:create_education")),
             'name="secret"',
         )
+
+class StarToggleAjaxTest(TestCase):
+    """toggle_star membalas JSON untuk fetch() dan redirect untuk form biasa."""
+
+    AJAX = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
+
+    def setUp(self):
+        Education.objects.all().delete()
+
+        self.user = User.objects.create_user(
+            username="ajax-user",
+            password="password",
+        )
+        self.other = User.objects.create_user(
+            username="ajax-other",
+            password="password",
+        )
+        self.education = Education.objects.create(
+            nama_sekolah="Universitas Ajax",
+            tingkat="S1",
+            tahun_masuk=2025,
+        )
+        self.url = reverse(
+            "main:toggle_star",
+            args=[self.education.pk],
+        )
+
+    def test_ajax_toggle_returns_state_and_total_count(self):
+        self.education.starred_by.add(self.other)
+        self.client.force_login(self.user)
+
+        first = self.client.post(self.url, **self.AJAX)
+        second = self.client.post(self.url, **self.AJAX)
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(
+            first["Content-Type"],
+            "application/json",
+        )
+        self.assertEqual(
+            first.json(),
+            {"starred": True, "star_count": 2},
+        )
+        self.assertEqual(
+            second.json(),
+            {"starred": False, "star_count": 1},
+        )
+        self.assertFalse(
+            self.education.starred_by.filter(
+                pk=self.user.pk
+            ).exists()
+        )
+
+    def test_plain_form_post_still_redirects(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url)
+
+        self.assertRedirects(
+            response,
+            reverse("main:show_education"),
+        )
+
+    def test_ajax_from_visitor_is_redirected_to_login_not_counted(self):
+        response = self.client.post(
+            self.url,
+            **self.AJAX,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(
+            "/login/",
+            response["Location"],
+        )
+        self.assertEqual(
+            self.education.starred_by.count(),
+            0,
+        )
+
+    def test_ajax_unknown_education_returns_404(self):
+        self.client.force_login(self.user)
+
+        url = reverse(
+            "main:toggle_star",
+            args=["00000000-0000-0000-0000-000000000000"],
+        )
+
+        self.assertEqual(
+            self.client.post(url, **self.AJAX).status_code,
+            404,
+        )
+
+    def test_star_button_markup_supports_script_and_accessibility(self):
+        self.education.starred_by.add(self.user)
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse("main:show_education")
+        )
+
+        self.assertContains(response, "data-star-form")
+        self.assertContains(
+            response,
+            'data-school="Universitas Ajax"',
+        )
+        self.assertContains(
+            response,
+            'aria-pressed="true"',
+        )
+        self.assertContains(
+            response,
+            "csrfmiddlewaretoken",
+        )
+        self.assertContains(
+            response,
+            "js/star-toggle.js",
+        )
+
+    def test_visitor_sees_login_link_with_count_but_no_form(self):
+        self.education.starred_by.add(self.other)
+
+        response = self.client.get(
+            reverse("main:show_education")
+        )
+
+        self.assertNotContains(
+            response,
+            "data-star-form",
+        )
+        self.assertContains(
+            response,
+            "Login untuk Star",
+        )
+        self.assertContains(
+            response,
+            "?next=/education/",
+        )

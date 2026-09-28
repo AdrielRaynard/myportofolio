@@ -425,15 +425,31 @@ def logout_user(request):
 # Star
 # ---------------------------------------------------------------------------
 
+
+def _wants_json(request):
+    """True bila request berasal dari fetch() halaman (bukan submit form biasa)."""
+    return request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
 @login_required
 @require_POST
 def toggle_star(request, education_id):
-    """Toggle satu star per user pada Education tertentu."""
+    """Toggle satu star per user pada Education tertentu.
+    - Request dari JavaScript (header `X-Requested-With`): balas JSON
+    `{"starred": bool, "star_count": int}` agar halaman diperbarui tanpa reload.
+    - Submit form biasa (tanpa JS): redirect kembali ke halaman Education.
+    """
     education = get_object_or_404(Education, pk=education_id)
 
     if education.starred_by.filter(pk=request.user.pk).exists():
         education.starred_by.remove(request.user)
+        starred = False
     else:
         education.starred_by.add(request.user)
+        starred = True
+
+    if _wants_json(request):
+        return JsonResponse(
+            {"starred": starred, "star_count": education.starred_by.count()}
+        )
 
     return redirect("main:show_education")
