@@ -1307,3 +1307,42 @@ class LoginRedirectTest(TestCase):
             reverse("main:show_main"),
             fetch_redirect_response=False,
         )
+
+class StarRelationTest(TestCase):
+    """Relasi ManyToMany Education <-> User untuk fitur star."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="star-user",
+            password="password",
+        )
+        self.other = User.objects.create_user(
+            username="star-other",
+            password="password",
+        )
+        self.education = Education.objects.create(
+            nama_sekolah="Universitas Star",
+            tingkat="S1",
+            tahun_masuk=2025,
+        )
+
+    def test_reverse_accessor_lists_starred_education_for_user(self):
+        self.education.starred_by.add(self.user)
+
+        self.assertEqual(
+            list(self.user.starred_education.all()),
+            [self.education],
+        )
+        self.assertEqual(
+            self.other.starred_education.count(),
+            0,
+        )
+
+    def test_same_user_cannot_star_twice(self):
+        self.education.starred_by.add(self.user)
+        self.education.starred_by.add(self.user)
+
+        self.assertEqual(
+            self.education.starred_by.count(),
+            1,
+        )
