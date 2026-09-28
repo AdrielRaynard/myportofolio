@@ -3,6 +3,7 @@ from unittest import mock
 
 from django.urls import reverse
 from django.utils import timezone
+from django.contrib.auth.models import Group, User
 from django.contrib.messages import constants as message_levels
 from django.contrib.messages.storage.base import Message
 from django.core import serializers
@@ -546,6 +547,10 @@ class ExperienceFormTest(TestCase):
 class ExperienceCrudViewTest(TestCase):
     def setUp(self):
         Experience.objects.all().delete()
+        self.owner = User.objects.create_superuser(
+            username="crud-owner", password="password"
+        )
+        self.client.force_login(self.owner)
         self.experience = Experience.objects.create(
             title="Staff Operasional",
             description="Membantu tim operasional.",
@@ -767,6 +772,10 @@ class EducationFormTest(TestCase):
 class EducationCrudViewTest(TestCase):
     def setUp(self):
         Education.objects.all().delete()
+        self.owner = User.objects.create_superuser(
+            username="education-owner", password="password"
+        )
+        self.client.force_login(self.owner)
         self.education = Education.objects.create(
             nama_sekolah="SMAK Contoh", tingkat="sma", tahun_masuk=2022, tahun_lulus=2025
         )
@@ -975,3 +984,165 @@ class EducationCrudViewTest(TestCase):
             "Universitas Indonesia",
             [i["fields"]["nama_sekolah"] for i in data],
         )
+
+class AuthorizationAndStarTest(TestCase):
+    """Test inti Tugas 5 tanpa menduplikasi seluruh test CRUD yang sudah ada."""
+
+    def setUp(self):
+        Experience.objects.all().delete()
+        Education.objects.all().delete()
+
+        self.regular = User.objects.create_user(
+            username="regular-user", password="password"
+        )
+        self.editor = User.objects.create_user(
+            username="editor-user", password="password"
+        )
+        editor_group, _ = Group.objects.get_or_create(name="Editor")
+        self.editor.groups.add(editor_group)
+        self.owner = User.objects.create_superuser(
+            username="portfolio-owner", password="password"
+        )
+
+        self.experience = Experience.objects.create(
+            title="Experience Test",
+            description="Untuk pengujian authorization.",
+            category="research",
+        )
+        self.education = Education.objects.create(
+            nama_sekolah="Education Test",
+            tingkat="S1",
+            jurusan="Sistem Informasi",
+            tahun_masuk=2025,
+        )
+
+    def test_visitor_must_login_for_protected_actions(self):
+        actions = [
+            ("get", "main:create_experience", []),
+            ("get", "main:create_education", []),
+            ("get", "main:update_experience", [self.experience.pk]),
+            ("get", "main:update_education", [self.education.pk]),
+            ("post", "main:delete_experience", [self.experience.pk]),
+            ("post", "main:delete_education", [self.education.pk]),
+        ]
+
+        for method, url_name, args in actions:
+            with self.subTest(url_name=url_name, method=method):
+                response = getattr(self.client, method)(
+                    reverse(url_name, args=args),
+                    data={},
+                )
+                self.assertEqual(response.status_code, 302)
+                self.assertIn("/login/", response["Location"])
+
+    def test_regular_user_cannot_create_update_or_delete(self):
+        self.client.force_login(self.regular)
+
+        actions = [
+            ("get", "main:create_experience", []),
+            ("get", "main:create_education", []),
+            ("get", "main:update_experience", [self.experience.pk]),
+            ("get", "main:update_education", [self.education.pk]),
+            ("post", "main:delete_experience", [self.experience.pk]),
+            ("post", "main:delete_education", [self.education.pk]),
+        ]
+
+        for method, url_name, args in actions:
+            with self.subTest(url_name=url_name, method=method):
+                response = getattr(self.client, method)(
+                    reverse(url_name, args=args),
+                    data={},
+                )
+                self.assertEqual(response.status_code, 403)
+
+    def test_editor_can_update_but_not_create_or_delete(self):
+        self.client.force_login(self.editor)
+
+        for url_name, args in (
+            ("main:update_experience", [self.experience.pk]),
+            ("main:update_education", [self.education.pk]),
+        ):
+            response = self.client.get(reverse(url_name, args=args))
+            self.assertEqual(response.status_code, 200)
+
+        for url_name, args, method in (
+            ("main:create_experience", [], "get"),
+            ("main:create_education", [], "get"),
+            ("main:delete_experience", [self.experience.pk], "post"),
+            ("main:delete_education", [self.education.pk], "post"),
+        ):
+            response = getattr(self.client, method)(
+                reverse(url_name, args=args),
+                data={},
+            )
+            self.assertEqual(response.status_code, 403)
+
+    def test_role_based_controls_are_hidden_or_shown(self):
+        experience_url = reverse("main:show_experience")
+        create_url = reverse("main:create_experience")
+        update_url = reverse("main:update_experience", args=[self.experience.pk])
+        delete_url = reverse("main:delete_experience", args=[self.experience.pk])
+
+        self.client.force_login(self.regular)
+        response = self.client.get(experience_url)
+        self.assertNotContains(response, create_url)
+        self.assertNotContains(response, update_url)
+        self.assertNotContains(response, delete_url)
+
+        self.client.force_login(self.editor)
+        response = self.client.get(experience_url)
+        self.assertContains(response, update_url)
+        self.assertNotContains(response, create_url)
+        self.assertNotContains(response, delete_url)
+
+        self.client.force_login(self.owner)
+        response = self.client.get(experience_url)
+        self.assertContains(response, create_url)
+        self.assertContains(response, update_url)
+        self.assertContains(response, delete_url)
+
+    def test_star_can_be_added_and_removed_by_one_user(self):
+        self.client.force_login(self.regular)
+
+        response = self.client.post(
+            reverse("main:toggle_star", args=[self.education.pk]),
+            follow=True,
+        )
+        self.assertRedirects(response, reverse("main:show_education"))
+        self.assertTrue(
+            self.education.starred_by.filter(pk=self.regular.pk).exists()
+        )
+        self.assertContains(response, "Unstar")
+        self.assertContains(response, "1")
+
+        response = self.client.post(
+            reverse("main:toggle_star", args=[self.education.pk]),
+            follow=True,
+        )
+        self.assertRedirects(response, reverse("main:show_education"))
+        self.assertFalse(
+            self.education.starred_by.filter(pk=self.regular.pk).exists()
+        )
+        self.assertContains(response, "Star")
+        self.assertContains(response, "0")
+
+    def test_star_endpoint_accepts_post_only(self):
+        self.client.force_login(self.regular)
+
+        response = self.client.get(
+            reverse("main:toggle_star", args=[self.education.pk])
+        )
+
+        self.assertEqual(response.status_code, 405)
+
+    def test_json_does_not_expose_star_users(self):
+        self.education.starred_by.add(self.regular)
+
+        response = self.client.get(
+            reverse("main:get_education_detail_json", args=[self.education.pk])
+        )
+        data = json.loads(response.content)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("starred_by", data[0]["fields"])
+        self.assertNotIn(str(self.regular.pk), response.content.decode())
