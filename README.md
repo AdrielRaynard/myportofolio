@@ -667,3 +667,1177 @@ AI sangat membantu untuk menghasilkan kemungkinan solusi dengan cepat, tetapi sa
 Karena itu, saya melakukan perbaikan manual dengan mengecek file yang benar-benar digunakan project, mencocokkan nama URL namespace seperti `main:...`, menyesuaikan reusable template dengan CSS yang sudah ada, dan mempertahankan `portfolio_pdf.html` sebagai template standalone karena kebutuhan rendering PDF berbeda dari halaman browser. Salah satu masalah yang saya temui adalah error `NoReverseMatch` karena namespace `main` belum terdaftar dengan benar; saya telusuri konfigurasi root/app URL dan pemanggilan `{% url %}` sampai referensinya konsisten.
 
 Saya juga menambahkan dan meninjau test untuk memastikan fitur tidak hanya terlihat benar secara visual, tetapi juga bekerja secara fungsional, termasuk pengujian JSON endpoint, CRUD, form validation, template inheritance, flash message, dan PDF.
+
+# Tugas 4 — Autentikasi, Otorisasi, dan Star
+
+## Tujuan
+
+Menerapkan pola autentikasi dan otorisasi dari Tutorial 04 pada portofolio hasil Tugas 3:
+
+1. **Halaman daftar dan JSON tetap publik.**
+2. **Perubahan data dan pemberian star mengikuti hak akses.**
+3. Ada peran baru, **Editor**, yang boleh mengubah data tanpa memiliki seluruh hak pemilik.
+
+---
+
+## Matriks Hak Akses
+
+| Aksi                                              | Pengunjung        | Pengguna | Editor | Pemilik (superuser) |
+| ------------------------------------------------- | ----------------- | -------- | ------ | ------------------- |
+| Melihat Profile, Experience, Education, JSON, PDF | Ya                | Ya       | Ya     | Ya                  |
+| Memberi / membatalkan star                        | Redirect ke login | Ya       | Ya     | Ya                  |
+| Mengubah (update) data                            | Redirect ke login | 403      | Ya     | Ya                  |
+| Membuat (create) data                             | Redirect ke login | 403      | 403    | Ya                  |
+| Menghapus (delete) data                           | Redirect ke login | 403      | 403    | Ya                  |
+
+> **Hierarki peran:** Peran Editor mewarisi hak Pengguna, dan Pemilik mewarisi hak Editor.
+
+---
+
+# 1. Autentikasi
+
+### Register
+
+**`/register/`** memakai `UserCreationForm`.
+
+Akun baru otomatis berperan **Pengguna**.
+
+### Login
+
+**`/login/`** memakai `AuthenticationForm` bawaan Django dan `login()`, lalu mengisi cookie `last_login`.
+
+Parameter **`?next=`** didukung sehingga pengguna kembali ke halaman tujuan setelah login.
+
+Nilai `next` divalidasi dengan `url_has_allowed_host_and_scheme` agar tidak menjadi **open redirect**.
+
+### Logout
+
+**`/logout/`** mengakhiri sesi dan menghapus cookie `last_login`.
+
+### Profile dan Navbar
+
+Halaman Profile menampilkan nilai cookie `last_login` sebagai **"Sesi Terakhir Login"**.
+
+Navbar menampilkan username dan **badge peran** (Owner / Editor / User) untuk akun yang login.
+
+---
+
+# 2. Otorisasi (Server-Side)
+
+Logika peran ada di **`main/permissions.py`**.
+
+### Komponen Otorisasi
+
+**`is_owner(user)`**
+
+`True` bila user terautentikasi dan `is_superuser`.
+
+**`is_editor(user)`**
+
+`True` bila user anggota group `Editor`:
+
+```python
+user.groups.filter(name="Editor").exists()
+```
+
+**`can_edit(user)`**
+
+```python
+is_owner or is_editor
+```
+
+**`role_required(predicate)`**
+
+Pembuat decorator:
+
+* `@login_required` lebih dulu
+* lalu `predicate`
+* belum login menghasilkan **redirect 302 ke login**
+* sudah login tapi tidak berhak menghasilkan **HTTP 403** (`PermissionDenied`)
+
+**`owner_required`**
+
+Dipakai untuk `create_*` dan `delete_*`.
+
+**`editor_or_owner_required`**
+
+Dipakai untuk `update_*`.
+
+### Pemasangan Decorator pada View
+
+**`create_education`, `create_experience`**
+
+```python
+@owner_required
+```
+
+**`update_education`, `update_experience`**
+
+```python
+@editor_or_owner_required
+```
+
+**`delete_education`, `delete_experience`**
+
+```python
+@owner_required
+@require_POST
+```
+
+**`toggle_star`**
+
+```python
+@login_required
+@require_POST
+```
+
+> **Penting:** Pemeriksaan ada di view (server), bukan hanya di template, sehingga akses langsung lewat URL tetap ditolak.
+
+---
+
+# 3. Peran Editor lewat Django `Group`
+
+Group **`Editor`** dibuat otomatis oleh data migration:
+
+```text
+main/migrations/0007_create_editor_group.py
+```
+
+Jadi group tersebut tersedia di database baru tanpa langkah manual.
+
+### Menambahkan User sebagai Editor
+
+Keanggotaan ditetapkan lewat **Django Admin**:
+
+```text
+/admin/ → Users → pilih user → Groups → Editor
+```
+
+### Context Processor
+
+Template membaca peran lewat context processor:
+
+```text
+main.context_processors.roles
+```
+
+Context processor ini mengirim `is_editor` dan `user_role` ke semua template.
+
+Kondisi yang dipakai:
+
+```django
+{% if user.is_superuser or is_editor %}
+```
+
+### Editor dan Kode Rahasia
+
+Karena hak Editor diverifikasi lewat group, Editor **tidak** perlu mengetahui kode rahasia pemilik saat mengubah data:
+
+```text
+require_secret=False
+```
+
+pada `OptionalSecretMixin`.
+
+---
+
+# 4. Kontrol Aksi pada Template
+
+Tombol disembunyikan bagi pengguna yang tidak berhak.
+
+### Tambah Pendidikan / Tambah Pengalaman
+
+**Tampil untuk:** Pemilik (`user.is_superuser`)
+
+### Ubah
+
+**Tampil untuk:** Pemilik dan Editor (`user.is_superuser or is_editor`)
+
+### Hapus
+
+**Tampil untuk:** Pemilik
+
+Termasuk **modal konfirmasi**.
+
+### Tombol Star
+
+**Tampil untuk:** Pengguna yang login
+
+Pengunjung melihat:
+
+> **Login untuk Star**
+
+---
+
+# 5. Fitur Star (`ManyToManyField`)
+
+Model `Education` memiliki:
+
+```python
+starred_by = ManyToManyField(
+    User,
+    related_name="starred_education",
+    blank=True
+)
+```
+
+### Migrasi
+
+**Migrasi `0005`**
+
+Menambahkan field.
+
+**Migrasi `0006`**
+
+Mengganti `related_name` awal:
+
+```text
+starred_projects
+```
+
+yang mengikuti istilah di tutorial menjadi:
+
+```text
+starred_education
+```
+
+agar sesuai dengan model.
+
+### View `toggle_star`
+
+Endpoint:
+
+```text
+POST /educations/<uuid>/star/
+```
+
+Nama route:
+
+```text
+main:toggle_star
+```
+
+### Perilaku Toggle
+
+Bila user sudah ada di `starred_by`, star dibatalkan.
+
+Bila belum, star diberikan.
+
+Relasi M2M menjamin **maksimal satu star per user**.
+
+### Respons JavaScript
+
+Permintaan dari JavaScript dengan header:
+
+```text
+X-Requested-With
+```
+
+dibalas JSON:
+
+```json
+{
+    "starred": bool,
+    "star_count": int
+}
+```
+
+Sehingga tombol diperbarui **tanpa reload**.
+
+### Fallback Tanpa JavaScript
+
+Submit form biasa tanpa JavaScript dibalas redirect ke halaman Education.
+
+Bila `fetch()` gagal,:
+
+```text
+static/js/star-toggle.js
+```
+
+mengirim form secara normal sebagai fallback.
+
+### Komponen Tombol Star
+
+File:
+
+```text
+templates/components/education_star.html
+```
+
+memuat:
+
+```html
+<form method="post">
+```
+
+dengan:
+
+```django
+{% csrf_token %}
+```
+
+Komponen ini menampilkan:
+
+* **jumlah total star**
+* **status star user**
+* `Star` / `Unstar`
+* `aria-pressed`
+
+### Perhitungan Star
+
+Jumlah star dan status user dihitung di view melalui:
+
+```text
+_attach_education_star_state
+```
+
+dengan:
+
+```python
+Count("starred_by")
+```
+
+sehingga tidak ada query per kartu.
+
+---
+
+# 6. Integritas API dan Keamanan Data
+
+Endpoint JSON Tugas 3 tetap berfungsi dan tetap **publik**.
+
+Method yang digunakan hanya:
+
+```text
+GET
+HEAD
+```
+
+### Whitelist Field JSON
+
+Serializer memakai **whitelist field**:
+
+```text
+EDUCATION_JSON_FIELDS
+EXPERIENCE_JSON_FIELDS
+```
+
+Tanpa whitelist, serializer Django akan ikut menyertakan field M2M:
+
+```text
+starred_by
+```
+
+berupa daftar ID akun.
+
+Dengan whitelist, **tidak ada identitas atau ID pengguna yang bocor lewat API**.
+
+### Endpoint Detail
+
+Endpoint detail yang tidak ditemukan mengembalikan **JSON 404**, bukan halaman HTML.
+
+### Keamanan Operasi Tulis
+
+Aksi tulis memakai:
+
+```text
+POST
+```
+
+dengan CSRF token.
+
+`PORTFOLIO_SECRET` dibaca dari `.env`, dibandingkan dengan:
+
+```python
+hmac.compare_digest
+```
+
+dan **fail closed** bila belum diatur.
+
+---
+
+# Daftar Endpoint
+
+### Public
+
+**`/`**
+
+* Method: `GET`
+* Akses: Publik
+* Keterangan: Profile dan cookie `last_login`
+
+**`/experience/`**
+
+**`/education/`**
+
+* Method: `GET`
+* Akses: Publik
+* Keterangan: Daftar (data dari JSON, dideserialisasi)
+
+**`/api/experience/`**
+
+**`/api/education/`**
+
+* Method: `GET`
+* Akses: Publik
+* Keterangan: JSON daftar
+* Filter: `?title=` / `?nama_sekolah=`
+
+**`/api/experience/<uuid>/`**
+
+**`/api/education/<uuid>/`**
+
+* Method: `GET`
+* Akses: Publik
+* Keterangan: JSON detail
+
+**`/portfolio/pdf/`**
+
+* Method: `GET`
+* Akses: Publik
+* Keterangan: Unduh PDF
+
+**`/register/`**
+
+**`/login/`**
+
+**`/logout/`**
+
+* Method: `GET/POST`
+* Akses: Publik
+* Keterangan: Autentikasi
+
+### Login Required
+
+**`/educations/<uuid>/star/`**
+
+* Method: `POST`
+* Akses: Login
+* Keterangan: Toggle star
+
+### Editor dan Pemilik
+
+**`/education/<uuid>/edit/`**
+
+**`/experience/<uuid>/edit/`**
+
+* Method: `GET/POST`
+* Akses: Editor, Pemilik
+* Keterangan: Update
+
+### Pemilik
+
+**`/education/add/`**
+
+**`/experience/add/`**
+
+* Method: `GET/POST`
+* Akses: Pemilik
+* Keterangan: Create
+
+**`/education/<uuid>/delete/`**
+
+**`/experience/<uuid>/delete/`**
+
+* Method: `POST`
+* Akses: Pemilik
+* Keterangan: Delete
+
+### Staff
+
+**`/admin/`**
+
+* Method: `GET/POST`
+* Akses: Staff
+* Keterangan: Django Admin (kelola group Editor)
+
+---
+
+# Pemetaan ke Checklist Tugas
+
+### Peran Editor lewat `Group` atau `Permission`
+
+**Implementasi:** Group `Editor` (migrasi `0007`), keanggotaan lewat Django Admin.
+
+### Pembatasan hak akses di server (redirect login / 403)
+
+**Implementasi:** `main/permissions.py`, dipasang sebagai decorator di `main/views.py`.
+
+### Sembunyikan tombol create/update/delete
+
+**Implementasi:** Kondisi `user.is_superuser` / `is_editor` di template.
+
+### `ManyToManyField` ke `User` + migrasi
+
+**Implementasi:** `Education.starred_by`, migrasi `0005` dan `0006`.
+
+### View `toggle_star`
+
+**Implementasi:** `toggle_star` + `components/education_star.html`
+
+Menggunakan:
+
+```django
+POST + {% csrf_token %}
+```
+
+serta jumlah dan status star.
+
+### Endpoint JSON aman
+
+**Implementasi:** Whitelist field, `starred_by` tidak diserialisasi.
+
+### Berjalan dengan `python manage.py runserver`
+
+**Implementasi:** Lihat bagian **Setup dan Menjalankan Project**.
+
+---
+
+# Struktur Project
+
+```text
+myportofolio/
+
+├── manage.py
+├── README.md
+├── requirements.txt
+├── test_e2e.py                     # uji end-to-end Selenium (opsional)
+├── .env                            # tidak masuk repository
+│
+├── main/
+│   ├── models.py                   # Experience, Education (+ starred_by)
+│   ├── forms.py                    # ModelForm, SecretCodeField, OptionalSecretMixin
+│   ├── views.py                    # halaman, CRUD, JSON, PDF, auth, toggle_star
+│   ├── permissions.py              # peran + decorator otorisasi
+│   ├── context_processors.py       # is_editor, user_role untuk template
+│   ├── urls.py
+│   ├── admin.py
+│   ├── tests.py                    # 122 metode test
+│   └── migrations/                 # 0005-0007: star, related_name, group Editor
+│
+├── portofolio/
+│   ├── settings.py
+│   └── urls.py
+│
+├── templates/
+│   ├── base.html
+│   ├── index.html
+│   ├── experience.html
+│   ├── education.html
+│   ├── form_page.html
+│   ├── login.html
+│   ├── register.html
+│   ├── portfolio_pdf.html
+│   └── components/
+│       ├── delete_modal.html
+│       ├── education_star.html
+│       └── messages.html
+│
+└── static/
+    ├── css/style.css
+    ├── js/live-search.js
+    ├── js/star-toggle.js
+    └── img/fotoAdriel.png
+```
+
+---
+
+# Teknologi yang Digunakan
+
+* **Python dan Django 6.0** (`django<6.1`)
+* **SQLite** (lokal) dan **PostgreSQL** (produksi, lewat `PRODUCTION=True`)
+* **Django Auth** (`User`, `Group`, session), Django ORM, `ModelForm`, serializers
+* **HTML5, CSS3, Django Template Language**
+* **JavaScript** (live search dan toggle star)
+* **`xhtml2pdf`** untuk ekspor PDF
+* **`python-dotenv`** untuk environment variable
+* **`whitenoise`** dan **`gunicorn`** untuk deployment
+* **Selenium** (hanya untuk `test_e2e.py`, tidak ada di `requirements.txt`)
+
+---
+
+# Setup dan Menjalankan Project
+
+## Prasyarat
+
+**Python 3.12 atau lebih baru**
+
+Dikembangkan dengan Python 3.13.
+
+Selain itu diperlukan:
+
+```text
+git
+```
+
+## 1. Clone dan masuk ke direktori project
+
+```bash
+git clone <url-repository>
+
+cd myportofolio
+```
+
+## 2. Buat dan aktifkan virtual environment
+
+### Windows
+
+```bash
+python -m venv env
+
+env\Scripts\activate
+```
+
+### macOS / Linux
+
+```bash
+python3 -m venv env
+
+source env/bin/activate
+```
+
+## 3. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+## 4. Siapkan file `.env`
+
+Buat file `.env` di root project, sejajar dengan `manage.py`.
+
+File ini ada di `.gitignore`, jadi **jangan di-commit**.
+
+```env
+PORTFOLIO_SECRET=isi_dengan_kode_rahasia_sendiri
+```
+
+`PORTFOLIO_SECRET` dipakai untuk melindungi operasi tulis milik **Pemilik**:
+
+```text
+create
+update
+delete
+```
+
+Bila tidak diisi, server tetap berjalan, tetapi operasi tulis Pemilik ditolak (**fail closed**).
+
+Peran Editor tidak memakai kode ini.
+
+### Variabel Tambahan (Opsional)
+
+```env
+# Hanya untuk test_e2e.py
+E2E_USER_PASSWORD=...
+E2E_ADMIN_PASSWORD=...
+
+# Hanya untuk produksi (PostgreSQL)
+PRODUCTION=True
+DB_NAME=...
+DB_USER=...
+DB_PASSWORD=...
+DB_HOST=...
+DB_PORT=...
+```
+
+## 5. Terapkan migrasi database
+
+```bash
+python manage.py migrate
+```
+
+Perintah ini:
+
+* membuat tabel
+* membuat relasi star
+* mengisi data pendidikan awal
+* **membuat group `Editor` secara otomatis**
+
+Berkas `db.sqlite3` tidak ikut repository, jadi langkah ini **wajib pada clone baru**.
+
+Bila mengubah model sendiri, jalankan:
+
+```bash
+python manage.py makemigrations
+```
+
+sebelum:
+
+```bash
+python manage.py migrate
+```
+
+## 6. Buat akun Pemilik (superuser)
+
+```bash
+python manage.py createsuperuser
+```
+
+## 7. Jalankan server
+
+```bash
+python manage.py runserver
+```
+
+Buka:
+
+```text
+http://localhost:8000/
+```
+
+Panel admin ada di:
+
+```text
+http://localhost:8000/admin/
+```
+
+## 8. Buat akun untuk setiap peran
+
+### Pemilik
+
+Akun dari langkah 6.
+
+### Pengguna
+
+Daftar lewat:
+
+```text
+/register/
+```
+
+### Editor
+
+1. Daftar lewat `/register/`.
+2. Login ke `/admin/` sebagai Pemilik.
+3. Buka **Users**.
+4. Pilih akun tersebut.
+5. Buka **Groups**.
+6. Tambahkan `Editor`.
+7. **Save**.
+
+## 9. Jalankan test
+
+```bash
+python manage.py test
+```
+
+Test suite (**122 metode**) mencakup:
+
+* halaman dan template inheritance
+* JSON dan filter
+* serialisasi/deserialisasi
+* CRUD dan validasi form
+* kode rahasia
+* redirect login dan 403 untuk tiap peran
+* visibilitas tombol per peran
+* toggle star
+* satu star per user
+* JSON tanpa `starred_by`
+* respons AJAX
+* redirect `?next=` yang aman
+* group Editor dari migrasi
+* badge peran
+
+## 10. (Opsional) Uji end-to-end
+
+Install Selenium:
+
+```bash
+pip install selenium
+```
+
+Jalankan:
+
+```bash
+python test_e2e.py
+```
+
+atau:
+
+```bash
+python test_e2e.py --headless
+```
+
+Server harus sedang berjalan dan Chrome terpasang.
+
+Skrip memeriksa:
+
+* CSRF token
+* login
+* cookie `last_login`
+* cookie `sessionid`
+* 403 untuk pengguna biasa
+* akses superuser
+* penghapusan cookie saat logout
+
+---
+
+# Verifikasi Fitur Tugas 4
+
+Checklist manual dengan server lokal berjalan.
+
+## Pengunjung (belum login)
+
+* [ ] `/`, `/experience/`, `/education/`, `/api/education/`, `/api/experience/` dapat dibuka
+* [ ] Tidak ada tombol Tambah, Ubah, atau Hapus
+* [ ] Tombol star berbunyi **"Login untuk Star"** dan mengarah ke `/login/?next=/education/`
+* [ ] Membuka `/education/add/` atau `/education/<uuid>/edit/` langsung diarahkan ke `/login/?next=...`
+* [ ] Setelah login, pengguna kembali ke halaman tujuan
+
+## Pengguna biasa
+
+* [ ] Navbar menampilkan username dan badge **User**
+* [ ] Star dapat diberikan lalu dibatalkan; jumlah star bertambah dan berkurang tanpa reload
+* [ ] Tidak ada tombol Tambah, Ubah, atau Hapus
+* [ ] `/education/add/` dan `/education/<uuid>/edit/` menghasilkan **403 Forbidden**
+
+## Editor
+
+* [ ] Badge **Editor**
+* [ ] Tombol **Ubah** tampil
+* [ ] Tombol Tambah dan Hapus tidak tampil
+* [ ] Form ubah dapat disimpan **tanpa** kode rahasia
+* [ ] `/education/add/` menghasilkan **403**
+* [ ] POST ke URL delete menghasilkan **403**
+
+## Pemilik
+
+* [ ] Badge **Owner**
+* [ ] Tombol Tambah, Ubah, dan Hapus tampil
+* [ ] Create, update, dan delete berhasil dengan kode rahasia yang benar
+* [ ] Create, update, dan delete gagal bila kode rahasia salah
+* [ ] Owner tetap dapat memberi star
+
+## JSON dan Keamanan
+
+* [ ] Beri star dengan satu akun, lalu buka `/api/education/`: tidak ada field `starred_by` maupun username
+* [ ] Filter `?nama_sekolah=` dan detail per UUID tetap bekerja
+* [ ] UUID yang tidak ada menghasilkan JSON 404
+* [ ] Logout menghapus cookie `last_login`
+
+---
+
+# Catatan Desain dan Keamanan
+
+## 1. Pemeriksaan di server, tampilan di template
+
+Menyembunyikan tombol hanya kenyamanan UI.
+
+Sumber kebenarannya adalah decorator di `permissions.py`, sehingga URL yang diketik langsung tetap ditolak.
+
+## 2. Dua kode status berbeda dengan sengaja
+
+Pengunjung diarahkan ke login (**302**) karena masalahnya belum terautentikasi.
+
+Pengguna yang sudah login tetapi tidak berhak menerima **403** karena login ulang tidak akan membantu.
+
+## 3. Group untuk Editor
+
+Menggunakan `Group` memudahkan pemilik menambah atau mencabut Editor lewat Admin tanpa mengubah kode.
+
+Migrasi data memastikan group selalu ada.
+
+## 4. Kode rahasia tetap ada untuk Pemilik
+
+Kode rahasia dari Tugas 3 dipertahankan sebagai lapisan tambahan untuk aksi tulis Pemilik.
+
+Editor cukup diverifikasi lewat group.
+
+## 5. Whitelist field JSON
+
+Field yang boleh keluar dari API disebut eksplisit, sehingga penambahan field baru pada model tidak otomatis ikut terekspos.
+
+## 6. Star toggle dengan progressive enhancement
+
+Form POST biasa selalu berfungsi.
+
+JavaScript hanya menambah pembaruan tanpa reload.
+
+## 7. Batasan yang diketahui
+
+Logout memakai `GET` seperti pada tutorial.
+
+`DEBUG = True` dan `SECRET_KEY` bawaan di `settings.py` hanya cocok untuk pengembangan dan perlu diganti untuk produksi.
+
+---
+
+### Fitur Tambahan Tugas 4
+
+#### 1. Toggle Star Tanpa Reload (AJAX + Fallback)
+
+Tombol star di halaman Education memperbarui jumlah dan status star tanpa memuat ulang halaman.
+
+Cara kerja:
+1. Tombol star adalah form `POST` biasa dengan `{% csrf_token %}`, sehingga tetap berfungsi tanpa JavaScript.
+2. `static/js/star-toggle.js` mencegat event `submit` lalu mengirim `fetch()` ke `toggle_star` dengan header `X-Requested-With: XMLHttpRequest`.
+3. View `toggle_star` mendeteksi header tersebut dan membalas JSON `{"starred": bool, "star_count": int}`. Tanpa header itu, view melakukan redirect seperti biasa.
+4. JavaScript memperbarui kelas `is-starred`, label Star/Unstar, `aria-pressed`, dan jumlah star.
+5. Jika `fetch` gagal (jaringan putus atau sesi habis), form dikirim secara normal sehingga server tetap menjadi sumber kebenaran.
+6. Event delegation di `document` membuat tombol tetap berfungsi pada kartu yang dirender ulang oleh Live Search.
+
+#### 2. Badge Peran di Navbar
+
+Navbar menampilkan badge **Owner**, **Editor**, atau **User** di samping username.
+
+Cara kerja:
+1. `main/context_processors.py` menghitung peran dari `main/permissions.py`: superuser menjadi Owner, anggota grup `Editor` menjadi Editor, dan pengguna login lainnya menjadi User.
+2. Label dikirim ke semua template sebagai `user_role`, bersama boolean `is_editor`.
+3. `base.html` menampilkan badge dan memakai kelas CSS `role-badge--<peran>` untuk warna berbeda.
+
+#### 3. Editor Tanpa Kode Rahasia dan Login Kembali ke Halaman Tujuan
+
+- Editor mengubah data tanpa kode rahasia milik pemilik. `OptionalSecretMixin` menghapus field `secret` dari form saat view memanggil `require_secret=False`. Pemilik tetap wajib mengisinya.
+- Setelah login, pengguna dikembalikan ke halaman asal lewat `?next=`. Nilai `next` divalidasi dengan `url_has_allowed_host_and_scheme` agar tidak terjadi open redirect.
+
+# AI Disclosure
+
+Bagian ini menjelaskan penggunaan AI dalam pengerjaan **kode, test, dan fitur** proyek.
+
+Saya dibantu AI pada seluruh bagian pengerjaan Tugas 4, sehingga rinciannya saya tuliskan per komponen.
+
+Isi `README.md` ini tidak termasuk dalam cakupan disclosure.
+
+## Tools
+
+### Claude (Anthropic)
+
+Pemakaian:
+
+* Diskusi rancangan
+* Penjelasan konsep Django
+* Penyusunan kode dan test
+* Review kode
+
+### ChatGPT (OpenAI)
+
+Pemakaian:
+
+* Debugging error
+* Pemeriksaan implementasi
+* Pembandingan kode sebelum dan sesudah
+
+---
+
+# Strategi Prompting
+
+## 1. Context-first
+
+Setiap prompt memuat konteks:
+
+* teks tugas dan checklist
+* potongan kode terkait
+* struktur file
+* traceback
+
+## 2. Constraint-aware
+
+Checklist tugas dijadikan batasan eksplisit, misalnya:
+
+> "403 untuk aksi tidak berhak, redirect login untuk pengunjung"
+
+dan AI diminta tidak menambah teknologi di luar materi.
+
+## 3. Perubahan minimal
+
+Untuk bug, AI diminta menunjuk file dan baris penyebab lalu mengusulkan perubahan sekecil mungkin.
+
+## 4. Verifikasi
+
+AI diminta membuat test dan skenario manual untuk tiap hak akses agar hasilnya bisa saya periksa sendiri.
+
+## 5. Iterasi dan penyesuaian
+
+Keluaran AI dibandingkan dengan kode proyek:
+
+* nama route
+* namespace `main:`
+* CSS yang ada
+
+Kemudian diperbaiki, lalu di-commit bertahap.
+
+---
+
+# Bagian yang Dibantu AI
+
+## `main/permissions.py`
+
+Komponen:
+
+```text
+role_required
+owner_required
+editor_or_owner_required
+```
+
+**Bantuan AI:** Usulan struktur decorator: `login_required` dibungkus pemeriksaan peran dengan `PermissionDenied`.
+
+**Yang saya lakukan:** Memetakan empat peran ke decorator tiap view, memastikan pengunjung mendapat 302 dan pengguna tidak berhak mendapat 403.
+
+## Group Editor dan migrasi `0007`
+
+**Bantuan AI:** Penjelasan `Group` vs `Permission` dan ide data migration agar group tersedia di database baru.
+
+**Yang saya lakukan:** Menjalankan migrasi di database bersih, menguji penetapan Editor lewat Django Admin.
+
+## `context_processors.roles` dan badge peran
+
+**Bantuan AI:** Ide mengirim `is_editor` dan `user_role` ke semua template.
+
+**Yang saya lakukan:** Menyesuaikan kondisi template dan gaya badge dengan CSS proyek.
+
+## `Education.starred_by`, migrasi `0005`-`0006`
+
+**Bantuan AI:** Contoh `ManyToManyField` ke `User` dan penjelasan `related_name`.
+
+**Yang saya lakukan:** Mengganti `related_name` menjadi `starred_education`, membuat dan menjalankan migrasi.
+
+## View `toggle_star` dan `education_star.html`
+
+**Bantuan AI:** Kerangka view toggle (POST, `login_required`, `add`/`remove`) dan komponen tombol.
+
+**Yang saya lakukan:** Menambahkan perhitungan jumlah star dengan `Count`, status per user, dan tautan login untuk pengunjung.
+
+## `static/js/star-toggle.js`
+
+**Bantuan AI:** Pola `fetch()` dengan event delegation dan fallback ke submit form.
+
+**Yang saya lakukan:** Menguji bersama live search dan memastikan tombol tetap bekerja tanpa JavaScript.
+
+## Whitelist field JSON
+
+**Bantuan AI:** Peringatan bahwa serializer akan menyertakan `starred_by`.
+
+**Yang saya lakukan:** Menerapkan `fields=` pada semua endpoint dan menambah test yang memeriksa username tidak muncul.
+
+## Redirect `?next=` pada login
+
+**Bantuan AI:** Saran validasi `url_has_allowed_host_and_scheme`.
+
+**Yang saya lakukan:** Menguji `next` internal, eksternal, dan tanpa `next`.
+
+## Editor tanpa kode rahasia (`OptionalSecretMixin`)
+
+**Bantuan AI:** Ide membuat field `secret` opsional per pemakaian form.
+
+**Yang saya lakukan:** Menyesuaikan pemanggilan form di view dan menguji bahwa Pemilik tetap wajib kode.
+
+## Test (`main/tests.py`, 122 metode) dan `test_e2e.py`
+
+**Bantuan AI:** Draf test untuk peran, star, JSON, migrasi, serta skrip Selenium.
+
+**Yang saya lakukan:** Menyesuaikan test dengan hak akses baru, menghapus false positive, menjalankan seluruh suite.
+
+Keputusan akhir, penyesuaian ke struktur proyek, dan penjalanan kode dilakukan oleh saya.
+
+Riwayat commit (branch `polish/tugas-04`) memperlihatkan proses perbaikan tersebut, misalnya:
+
+* mengganti `related_name`
+* mengembalikan `permissions.py` yang sempat terhapus
+* menghapus kode duplikat di `settings.py`
+* menyesuaikan test yang memberi hasil positif palsu
+
+---
+
+# Contoh Log Prompting
+
+## Otorisasi
+
+**Kebutuhan:** Pembatasan per peran
+
+**Ringkasan prompt:** Menyertakan tabel empat peran dan `views.py`, meminta pembatasan server-side dengan redirect login dan 403.
+
+**Hasil yang dipakai:** Decorator peran di `permissions.py`.
+
+## Peran Editor
+
+**Kebutuhan:** Group
+
+**Ringkasan prompt:** Menanyakan perbedaan `Group` dan `Permission` serta cara memastikan group ada di database baru.
+
+**Hasil yang dipakai:** Group `Editor` lewat data migration.
+
+## Star
+
+**Kebutuhan:** Relasi M2M
+
+**Ringkasan prompt:** Meminta contoh `ManyToManyField` ke `User` dan view toggle satu star per user.
+
+**Hasil yang dipakai:** Field `starred_by` dan view `toggle_star`.
+
+## Keamanan API
+
+**Kebutuhan:** Kebocoran data
+
+**Ringkasan prompt:** Menanyakan apakah serializer menampilkan relasi M2M dan cara membatasinya.
+
+**Hasil yang dipakai:** Whitelist `fields` dan test kebocoran.
+
+## Star tanpa reload
+
+**Kebutuhan:** Interaktivitas
+
+**Ringkasan prompt:** Meminta `fetch()` yang tetap bekerja tanpa JavaScript dan setelah live search.
+
+**Hasil yang dipakai:** `star-toggle.js` dan respons JSON pada `toggle_star`.
+
+## Login
+
+**Kebutuhan:** Redirect aman
+
+**Ringkasan prompt:** Meminta pengembalian ke halaman tujuan tanpa membuka open redirect.
+
+**Hasil yang dipakai:** `_safe_next_url` dan test `next`.
+
+## Pengujian
+
+**Kebutuhan:** Cakupan test
+
+**Ringkasan prompt:** Menyertakan checklist tugas, meminta test per peran dan edge case.
+
+**Hasil yang dipakai:** `AuthorizationAndStarTest` dan kelas test terkait.
+
+---
+
+# Keterbatasan AI dan Perbaikan Manual
+
+### Struktur Proyek
+
+Saran AI tidak selalu cocok dengan struktur proyek.
+
+Contohnya `related_name` awal yang mengikuti istilah tutorial:
+
+```text
+starred_projects
+```
+
+tidak sesuai karena relasinya berada di model `Education`, sehingga saya ganti melalui migrasi `0006`.
+
+### Serializer
+
+Serializer bawaan akan menyertakan relasi M2M.
+
+Tanpa pemeriksaan, `starred_by` akan tampil di API publik, jadi saya menambahkan whitelist field dan test khusus.
+
+### Test
+
+Test yang dibuat sebelum ada login gagal setelah hak akses diterapkan dan sebagian memberi hasil positif palsu.
+
+Misalnya mencocokkan angka `pk` yang kebetulan muncul di dalam UUID.
+
+Saya menyesuaikan test dengan peran baru dan memeriksa username, bukan `pk`.
+
+### Konsistensi Project
+
+Kode dari AI tidak menjamin konsistensi:
+
+* nama route
+* namespace `main:`
+* CSS
+
+Saya memeriksa hal tersebut dan menjalankan:
+
+```bash
+python manage.py test
+```
+
+serta pengujian manual per peran sebelum commit.
+
