@@ -18,8 +18,6 @@ load_dotenv()
 
 PORTFOLIO_SECRET = os.getenv("PORTFOLIO_SECRET")
 
-CSRF_TRUSTED_ORIGINS = ["https://adriel-raynard-myportofolio.pws.cs.ui.ac.id/"]
-
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "adriel-raynard-myportofolio.pws.cs.ui.ac.id"]
 
 CSRF_TRUSTED_ORIGINS = ["https://adriel-raynard-myportofolio.pws.cs.ui.ac.id"]
