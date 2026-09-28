@@ -1346,3 +1346,22 @@ class StarRelationTest(TestCase):
             self.education.starred_by.count(),
             1,
         )
+
+class EditorGroupMigrationTest(TestCase):
+    def test_editor_group_exists_after_migrate(self):
+        self.assertTrue(
+            Group.objects.filter(name="Editor").exists()
+        )
+
+    def test_user_added_to_group_becomes_editor(self):
+        user = User.objects.create_user(
+            username="new-editor",
+            password="password",
+        )
+        self.assertFalse(is_editor(user))
+
+        user.groups.add(
+            Group.objects.get(name="Editor")
+        )
+
+        self.assertTrue(is_editor(user))
