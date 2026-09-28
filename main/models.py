@@ -50,7 +50,7 @@ class Education(models.Model):
     tahun_lulus = models.PositiveIntegerField(blank=True, null=True)
     deskripsi = models.TextField(blank=True)
     starred_by = models.ManyToManyField(
-        User, related_name="starred_projects", blank=True
+        User, related_name="starred_education", blank=True
     )
 
     class Meta:

@@ -18,8 +18,6 @@ load_dotenv()
 
 PORTFOLIO_SECRET = os.getenv("PORTFOLIO_SECRET")
 
-CSRF_TRUSTED_ORIGINS = ["https://adriel-raynard-myportofolio.pws.cs.ui.ac.id/"]
-
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "adriel-raynard-myportofolio.pws.cs.ui.ac.id"]
 
 CSRF_TRUSTED_ORIGINS = ["https://adriel-raynard-myportofolio.pws.cs.ui.ac.id"]
@@ -62,6 +60,9 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'portofolio.urls'
 
+# Tujuan redirect bawaan `login_required` bila pengunjung belum login.
+LOGIN_URL = 'main:login'
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -72,6 +73,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'main.context_processors.roles',
             ],
         },
     },

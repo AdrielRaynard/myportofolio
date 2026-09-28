@@ -1,23 +1,25 @@
+{% comment %}
+    Tombol star Education. Konteks: education (dengan star_count dan user_has_starred).
+
+    - Login: form POST + csrf_token. static/js/star-toggle.js mengubahnya menjadi
+      request fetch(); tanpa JavaScript form tetap bekerja lewat redirect.
+    - Belum login: tautan ke halaman login yang kembali ke Education (?next=).
+{% endcomment %}
 {% if user.is_authenticated %}
     <form method="post"
           action="{% url 'main:toggle_star' education.id %}"
-          class="star-form">
+          class="star-form"
+          data-star-form
+          data-school="{{ education.nama_sekolah }}">
         {% csrf_token %}
 
         <button type="submit"
                 class="button button-star{% if education.user_has_starred %} is-starred{% endif %}"
+                aria-pressed="{% if education.user_has_starred %}true{% else %}false{% endif %}"
                 aria-label="{% if education.user_has_starred %}Batalkan star untuk {{ education.nama_sekolah }}{% else %}Beri star untuk {{ education.nama_sekolah }}{% endif %}">
             <span aria-hidden="true">★</span>
-
-            {% if education.user_has_starred %}
-                Unstar
-            {% else %}
-                Star
-            {% endif %}
-
-            <span class="star-count">
-                {{ education.star_count }}
-            </span>
+            <span class="star-label">{% if education.user_has_starred %}Unstar{% else %}Star{% endif %}</span>
+            <span class="star-count">{{ education.star_count }}</span>
         </button>
     </form>
 {% else %}
