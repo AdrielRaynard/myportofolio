@@ -62,6 +62,9 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'portofolio.urls'
 
+# Tujuan redirect bawaan `login_required` bila pengunjung belum login.
+LOGIN_URL = 'main:login'
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -72,6 +75,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'main.context_processors.roles',
             ],
         },
     },

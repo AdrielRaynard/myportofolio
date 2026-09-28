@@ -13,6 +13,7 @@ from django.test import TestCase, override_settings
 from django.core.exceptions import ValidationError
 from main.forms import EducationForm, ExperienceForm, SecretCodeField, SecretCodeForm
 from main.models import Experience, Education
+from main.permissions import can_edit, is_editor, is_owner
 
 
 
@@ -1173,3 +1174,54 @@ class AuthPagesTest(TestCase):
 
                 self.assertEqual(html.count("<title>"), 1)
                 self.assertIn(f"<title>{label} - Adriel</title>", html)
+
+class PermissionHelpersTest(TestCase):
+    """Helper peran di main/permissions.py dan context processor `roles`."""
+
+    def setUp(self):
+        self.regular = User.objects.create_user(
+            username="helper-regular",
+            password="password",
+        )
+        self.editor = User.objects.create_user(
+            username="helper-editor",
+            password="password",
+        )
+        group, _ = Group.objects.get_or_create(name="Editor")
+        self.editor.groups.add(group)
+        self.owner = User.objects.create_superuser(
+            username="helper-owner",
+            password="password",
+        )
+
+    def test_role_predicates(self):
+        from django.contrib.auth.models import AnonymousUser
+
+        cases = [
+            # user,               owner, editor, can_edit
+            (AnonymousUser(),     False, False, False),
+            (self.regular,        False, False, False),
+            (self.editor,         False, True,  True),
+            (self.owner,          True,  False, True),
+        ]
+
+        for user, owner, editor, edit in cases:
+            with self.subTest(user=str(user)):
+                self.assertEqual(is_owner(user), owner)
+                self.assertEqual(is_editor(user), editor)
+                self.assertEqual(can_edit(user), edit)
+
+    def test_context_processor_exposes_is_editor(self):
+        self.client.force_login(self.editor)
+        self.assertTrue(
+            self.client.get(
+                reverse("main:show_education")
+            ).context["is_editor"]
+        )
+
+        self.client.force_login(self.regular)
+        self.assertFalse(
+            self.client.get(
+                reverse("main:show_education")
+            ).context["is_editor"]
+        )
