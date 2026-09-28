@@ -1,7 +1,6 @@
 """Context processor: menyediakan informasi peran ke semua template."""
 
-
-from .permissions import is_editor, is_owner
+from main.permissions import is_editor, is_owner
 
 
 def roles(request):

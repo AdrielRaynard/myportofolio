@@ -1,4 +1,10 @@
-"""View untuk aplikasi `main` (portofolio pribadi)."""
+"""View untuk aplikasi `main` (portofolio pribadi).
+
+Hak akses (Pengunjung / Pengguna / Editor / Pemilik) diterapkan di sisi server
+lewat decorator di `main.permissions`; template hanya menyembunyikan tombol
+sebagai kenyamanan UI. Data yang tampil di halaman Experience dan Education
+diambil dari endpoint JSON yang sama dengan yang dilihat klien API.
+"""
 
 import datetime
 from io import BytesIO
@@ -8,20 +14,20 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.core import serializers
-from django.core.exceptions import PermissionDenied
 from django.db.models import Count
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST, require_safe
 from xhtml2pdf import pisa
 
 from main.forms import EducationForm, ExperienceForm, SecretCodeForm
 from main.models import Education, Experience
+from main.permissions import editor_or_owner_required, owner_required
 
 OWNER_NAME = "Adriel"
-EDITOR_GROUP_NAME = "Editor"
 
 # Field yang boleh keluar lewat endpoint JSON.
 # `starred_by` sengaja tidak diserialisasikan agar API tidak membocorkan
@@ -43,30 +49,6 @@ EDUCATION_JSON_FIELDS = [
     "tahun_lulus",
     "deskripsi",
 ]
-
-
-# ---------------------------------------------------------------------------
-# Helper authorization
-# ---------------------------------------------------------------------------
-
-def _is_editor(user):
-    """Return True jika user merupakan anggota group Editor."""
-    return (
-        user.is_authenticated
-        and user.groups.filter(name=EDITOR_GROUP_NAME).exists()
-    )
-
-
-def _require_owner(user):
-    """Hanya superuser/pemilik portfolio yang boleh create/delete."""
-    if not user.is_superuser:
-        raise PermissionDenied
-
-
-def _require_editor_or_owner(user):
-    """Editor dan superuser boleh update; user biasa tidak."""
-    if not (user.is_superuser or _is_editor(user)):
-        raise PermissionDenied
 
 
 def _page_context(**extra):
@@ -147,10 +129,18 @@ def _form_view(
     cancel_url,
     success_url,
     success_message,
+    require_secret=True,
 ):
-    """View generik halaman Create/Update berbasis ModelForm."""
+    """View generik halaman Create/Update berbasis ModelForm.
+
+    `require_secret=False` dipakai untuk Editor (otorisasi sudah lewat group).
+    """
     is_post = request.method == "POST"
-    form = form_class(request.POST if is_post else None, instance=instance)
+    form = form_class(
+        request.POST if is_post else None,
+        instance=instance,
+        require_secret=require_secret,
+    )
 
     if is_post and form.is_valid():
         form.save()
@@ -184,6 +174,7 @@ def _delete_with_secret(request, instance, *, success_url, success_message):
 # ---------------------------------------------------------------------------
 
 def show_main(request):
+    """Halaman profil; menampilkan cookie `last_login` bila ada."""
     last_login = request.COOKIES.get(
         "last_login",
         "Belum ada sesi login / Cookie tidak ditemukan",
@@ -231,14 +222,13 @@ def show_experience(request):
     context = _page_context(
         experience_list=experiences,
         title_query=request.GET.get("title", "").strip(),
-        is_editor=_is_editor(request.user),
     )
     return render(request, "experience.html", context)
 
 
-@login_required(login_url="/login/")
+@owner_required
 def create_experience(request):
-    _require_owner(request.user)
+    """Tambah pengalaman. Khusus pemilik (403 bagi Editor/Pengguna)."""
     return _form_view(
         request,
         ExperienceForm,
@@ -250,9 +240,9 @@ def create_experience(request):
     )
 
 
-@login_required(login_url="/login/")
+@editor_or_owner_required
 def update_experience(request, experience_id):
-    _require_editor_or_owner(request.user)
+    """Ubah pengalaman. Editor atau pemilik; kode rahasia hanya diminta dari pemilik."""
     experience = get_object_or_404(Experience, pk=experience_id)
     return _form_view(
         request,
@@ -263,13 +253,14 @@ def update_experience(request, experience_id):
         cancel_url=reverse("main:show_experience"),
         success_url="main:show_experience",
         success_message="Pengalaman berhasil diperbarui!",
+        require_secret=request.user.is_superuser,
     )
 
 
-@login_required(login_url="/login/")
+@owner_required
 @require_POST
 def delete_experience(request, experience_id):
-    _require_owner(request.user)
+    """Hapus pengalaman (POST). Khusus pemilik dan wajib kode rahasia."""
     experience = get_object_or_404(Experience, pk=experience_id)
     return _delete_with_secret(
         request,
@@ -310,14 +301,13 @@ def show_education(request):
     context = _page_context(
         education_list=education,
         nama_sekolah_query=request.GET.get("nama_sekolah", "").strip(),
-        is_editor=_is_editor(request.user),
     )
     return render(request, "education.html", context)
 
 
-@login_required(login_url="/login/")
+@owner_required
 def create_education(request):
-    _require_owner(request.user)
+    """Tambah pendidikan. Khusus pemilik (403 bagi Editor/Pengguna)."""
     return _form_view(
         request,
         EducationForm,
@@ -329,9 +319,9 @@ def create_education(request):
     )
 
 
-@login_required(login_url="/login/")
+@editor_or_owner_required
 def update_education(request, education_id):
-    _require_editor_or_owner(request.user)
+    """Ubah pendidikan. Editor atau pemilik; kode rahasia hanya diminta dari pemilik."""
     education = get_object_or_404(Education, pk=education_id)
     return _form_view(
         request,
@@ -342,13 +332,14 @@ def update_education(request, education_id):
         cancel_url=reverse("main:show_education"),
         success_url="main:show_education",
         success_message="Riwayat pendidikan berhasil diperbarui!",
+        require_secret=request.user.is_superuser,
     )
 
 
-@login_required(login_url="/login/")
+@owner_required
 @require_POST
 def delete_education(request, education_id):
-    _require_owner(request.user)
+    """Hapus pendidikan (POST). Khusus pemilik dan wajib kode rahasia."""
     education = get_object_or_404(Education, pk=education_id)
 
     return _delete_with_secret(
@@ -364,6 +355,7 @@ def delete_education(request, education_id):
 # ---------------------------------------------------------------------------
 
 def download_portfolio_pdf(request):
+    """Unduh ringkasan Experience dan Education sebagai PDF (publik)."""
     context = _page_context(
         experience_list=Experience.objects.all(),
         education_list=Education.objects.all(),
@@ -390,6 +382,7 @@ def download_portfolio_pdf(request):
 # ---------------------------------------------------------------------------
 
 def register(request):
+    """Registrasi akun biasa (`UserCreationForm`); akun baru berperan Pengguna."""
     form = UserCreationForm(request.POST or None)
 
     if request.method == "POST" and form.is_valid():
@@ -404,13 +397,26 @@ def register(request):
     return render(request, "register.html", context)
 
 
+def _safe_next_url(request):
+    """Ambil parameter `next` hanya bila mengarah ke situs ini (cegah open redirect)."""
+    next_url = request.POST.get("next") or request.GET.get("next", "")
+    is_safe = url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    )
+    return next_url if is_safe else ""
+
+
 def login_user(request):
+    """Login bawaan Django, set cookie `last_login`, lalu kembali ke `?next=` bila aman."""
     form = AuthenticationForm(request, data=request.POST or None)
+    next_url = _safe_next_url(request)
 
     if request.method == "POST" and form.is_valid():
         user = form.get_user()
         login(request, user)
-        response = redirect("main:show_main")
+        response = redirect(next_url or "main:show_main")
         response.set_cookie(
             "last_login",
             datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -420,11 +426,13 @@ def login_user(request):
     context = {
         "name": OWNER_NAME,
         "form": form,
+        "next": next_url,
     }
     return render(request, "login.html", context)
 
 
 def logout_user(request):
+    """Logout, akhiri sesi, dan hapus cookie `last_login`."""
     logout(request)
     response = redirect("main:show_main")
     response.delete_cookie("last_login")
@@ -435,15 +443,33 @@ def logout_user(request):
 # Star
 # ---------------------------------------------------------------------------
 
-@login_required(login_url="/login/")
+
+def _wants_json(request):
+    """True bila request berasal dari fetch() halaman (bukan submit form biasa)."""
+    return request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+
+@login_required
 @require_POST
 def toggle_star(request, education_id):
-    """Toggle satu star per user pada Education tertentu."""
+    """Toggle satu star per user pada Education tertentu (login + POST + CSRF).
+
+    - Request dari JavaScript (header `X-Requested-With`): balas JSON
+      `{"starred": bool, "star_count": int}` agar halaman diperbarui tanpa reload.
+    - Submit form biasa (tanpa JS): redirect kembali ke halaman Education.
+    """
     education = get_object_or_404(Education, pk=education_id)
 
     if education.starred_by.filter(pk=request.user.pk).exists():
         education.starred_by.remove(request.user)
+        starred = False
     else:
         education.starred_by.add(request.user)
+        starred = True
+
+    if _wants_json(request):
+        return JsonResponse(
+            {"starred": starred, "star_count": education.starred_by.count()}
+        )
 
     return redirect("main:show_education")
