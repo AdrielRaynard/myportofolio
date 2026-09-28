@@ -179,6 +179,11 @@ class BaseTemplateInheritanceTest(TestCase):
         "main:create_education",
     ]
 
+    def setUp(self):
+        # Halaman create hanya boleh dibuka pemilik portofolio (superuser).
+       owner = User.objects.create_superuser(username="base-owner", password="password")
+       self.client.force_login(owner)
+
     def test_every_page_extends_base_template(self):
         for url_name in self.PAGE_URL_NAMES:
             with self.subTest(page=url_name):
@@ -236,6 +241,8 @@ class FlashMessageTest(TestCase):
 
     @override_settings(PORTFOLIO_SECRET="rahasia-test")
     def test_success_message_is_displayed_after_redirect(self):
+        owner = User.objects.create_superuser(username="flash-owner", password="password")
+        self.client.force_login(owner)
         response = self.client.post(
             reverse("main:create_education"),
             {
@@ -1145,4 +1152,5 @@ class AuthorizationAndStarTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("starred_by", data[0]["fields"])
-        self.assertNotIn(str(self.regular.pk), response.content.decode())
+        # Cek username (bukan pk): angka pk mudah "kebetulan" muncul di dalam UUID.
+        self.assertNotIn(self.regular.username, response.content.decode())
