@@ -19,6 +19,7 @@ from xhtml2pdf import pisa
 from main.forms import EducationForm, ExperienceForm, SecretCodeForm
 from main.models import Education, Experience
 from main.permissions import editor_or_owner_required, owner_required
+from django.utils.http import url_has_allowed_host_and_scheme
 
 OWNER_NAME = "Adriel"
 EDITOR_GROUP_NAME = "Editor"
@@ -370,14 +371,25 @@ def register(request):
     }
     return render(request, "register.html", context)
 
+def _safe_next_url(request):
+    """Ambil parameter `next` hanya bila mengarah ke situs ini (cegah open redirect)."""
+    next_url = request.POST.get("next") or request.GET.get("next", "")
+    is_safe = url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    )
+    return next_url if is_safe else ""
+
 
 def login_user(request):
     form = AuthenticationForm(request, data=request.POST or None)
+    next_url = _safe_next_url(request)
 
     if request.method == "POST" and form.is_valid():
         user = form.get_user()
         login(request, user)
-        response = redirect("main:show_main")
+        response = redirect(next_url or "main:show_main")
         response.set_cookie(
             "last_login",
             datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -387,6 +399,7 @@ def login_user(request):
     context = {
         "name": OWNER_NAME,
         "form": form,
+        "next": next_url,
     }
     return render(request, "login.html", context)
 

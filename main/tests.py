@@ -1225,3 +1225,85 @@ class PermissionHelpersTest(TestCase):
                 reverse("main:show_education")
             ).context["is_editor"]
         )
+
+class LoginRedirectTest(TestCase):
+    """Login mengembalikan pengguna ke halaman tujuan (`?next=`) dengan aman."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="next-user",
+            password="password",
+        )
+
+    def login(self, next_url=None, query=""):
+        data = {
+            "username": "next-user",
+            "password": "password",
+        }
+
+        if next_url is not None:
+            data["next"] = next_url
+
+        return self.client.post(reverse("main:login") + query, data)
+
+    def test_login_form_carries_next_as_hidden_field(self):
+        response = self.client.get(
+            reverse("main:login"),
+            {"next": "/education/"},
+        )
+
+        self.assertContains(
+            response,
+            '<input type="hidden" name="next" value="/education/">',
+        )
+
+    def test_protected_page_redirects_back_after_login(self):
+        Education.objects.all().delete()
+
+        response = self.client.get(reverse("main:create_education"))
+        self.assertEqual(
+            response["Location"],
+            "/login/?next=/education/add/",
+        )
+
+        response = self.login(next_url="/education/")
+        self.assertRedirects(
+            response,
+            "/education/",
+            fetch_redirect_response=False,
+        )
+        self.assertIn("sessionid", response.cookies)
+        self.assertIn("last_login", response.cookies)
+
+    def test_next_from_query_string_is_used_when_form_field_missing(self):
+        response = self.login(query="?next=/experience/")
+
+        self.assertRedirects(
+            response,
+            "/experience/",
+            fetch_redirect_response=False,
+        )
+
+    def test_external_next_is_ignored(self):
+        for evil in (
+            "https://evil.example/",
+            "//evil.example/",
+            "javascript:alert(1)",
+        ):
+            with self.subTest(next=evil):
+                response = self.login(next_url=evil)
+
+                self.assertRedirects(
+                    response,
+                    reverse("main:show_main"),
+                    fetch_redirect_response=False,
+                )
+
+    def test_login_without_next_goes_to_home(self):
+        response = self.login()
+
+        self.assertRedirects(
+            response,
+            reverse("main:show_main"),
+            fetch_redirect_response=False,
+        )
