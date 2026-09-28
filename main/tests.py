@@ -13,6 +13,7 @@ from django.test import TestCase, override_settings
 from django.core.exceptions import ValidationError
 from main.forms import EducationForm, ExperienceForm, SecretCodeField, SecretCodeForm
 from main.models import Experience, Education
+from main.permissions import can_edit, is_editor, is_owner
 
 
 
@@ -31,6 +32,14 @@ class MainTest(TestCase):
         self.assertTemplateUsed(response, "index.html")
         self.assertNotContains(response, self.experience.title)
         self.assertContains(response, f'href="{reverse("main:show_experience")}"')
+
+    def test_experience_page_has_no_stray_markdown_fences(self):
+        """Regresi: sisa ``` hasil salin markdown pernah ikut tampil di kartu."""
+        response = self.client.get(reverse("main:show_experience"))
+        self.assertNotContains(response, "```")
+
+        empty = self.client.get(reverse("main:show_experience"), {"title": "tidak-ada"})
+        self.assertNotContains(empty, "```")
 
     def test_nonexistent_page_returns_404(self):
         response = self.client.get("/halaman-yang-tidak-ada/")
@@ -179,6 +188,11 @@ class BaseTemplateInheritanceTest(TestCase):
         "main:create_education",
     ]
 
+    def setUp(self):
+        # Halaman create hanya boleh dibuka pemilik portofolio (superuser).
+       owner = User.objects.create_superuser(username="base-owner", password="password")
+       self.client.force_login(owner)
+
     def test_every_page_extends_base_template(self):
         for url_name in self.PAGE_URL_NAMES:
             with self.subTest(page=url_name):
@@ -236,6 +250,8 @@ class FlashMessageTest(TestCase):
 
     @override_settings(PORTFOLIO_SECRET="rahasia-test")
     def test_success_message_is_displayed_after_redirect(self):
+        owner = User.objects.create_superuser(username="flash-owner", password="password")
+        self.client.force_login(owner)
         response = self.client.post(
             reverse("main:create_education"),
             {
@@ -1145,4 +1161,551 @@ class AuthorizationAndStarTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("starred_by", data[0]["fields"])
-        self.assertNotIn(str(self.regular.pk), response.content.decode())
+        # Cek username (bukan pk): angka pk mudah "kebetulan" muncul di dalam UUID.
+        self.assertNotIn(self.regular.username, response.content.decode())
+
+class AuthPagesTest(TestCase):
+    """Halaman login/register memakai base.html dengan tepat satu <title>."""
+
+    def test_login_and_register_have_single_title(self):
+        for url_name, label in (("main:login", "Login"), ("main:register", "Register")):
+            with self.subTest(page=url_name):
+                html = self.client.get(reverse(url_name)).content.decode()
+
+                self.assertEqual(html.count("<title>"), 1)
+                self.assertIn(f"<title>{label} - Adriel</title>", html)
+
+class PermissionHelpersTest(TestCase):
+    """Helper peran di main/permissions.py dan context processor `roles`."""
+
+    def setUp(self):
+        self.regular = User.objects.create_user(
+            username="helper-regular",
+            password="password",
+        )
+        self.editor = User.objects.create_user(
+            username="helper-editor",
+            password="password",
+        )
+        group, _ = Group.objects.get_or_create(name="Editor")
+        self.editor.groups.add(group)
+        self.owner = User.objects.create_superuser(
+            username="helper-owner",
+            password="password",
+        )
+
+    def test_role_predicates(self):
+        from django.contrib.auth.models import AnonymousUser
+
+        cases = [
+            # user,               owner, editor, can_edit
+            (AnonymousUser(),     False, False, False),
+            (self.regular,        False, False, False),
+            (self.editor,         False, True,  True),
+            (self.owner,          True,  False, True),
+        ]
+
+        for user, owner, editor, edit in cases:
+            with self.subTest(user=str(user)):
+                self.assertEqual(is_owner(user), owner)
+                self.assertEqual(is_editor(user), editor)
+                self.assertEqual(can_edit(user), edit)
+
+    def test_context_processor_exposes_is_editor(self):
+        self.client.force_login(self.editor)
+        self.assertTrue(
+            self.client.get(
+                reverse("main:show_education")
+            ).context["is_editor"]
+        )
+
+        self.client.force_login(self.regular)
+        self.assertFalse(
+            self.client.get(
+                reverse("main:show_education")
+            ).context["is_editor"]
+        )
+
+class LoginRedirectTest(TestCase):
+    """Login mengembalikan pengguna ke halaman tujuan (`?next=`) dengan aman."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="next-user",
+            password="password",
+        )
+
+    def login(self, next_url=None, query=""):
+        data = {
+            "username": "next-user",
+            "password": "password",
+        }
+
+        if next_url is not None:
+            data["next"] = next_url
+
+        return self.client.post(reverse("main:login") + query, data)
+
+    def test_login_form_carries_next_as_hidden_field(self):
+        response = self.client.get(
+            reverse("main:login"),
+            {"next": "/education/"},
+        )
+
+        self.assertContains(
+            response,
+            '<input type="hidden" name="next" value="/education/">',
+        )
+
+    def test_protected_page_redirects_back_after_login(self):
+        Education.objects.all().delete()
+
+        response = self.client.get(reverse("main:create_education"))
+        self.assertEqual(
+            response["Location"],
+            "/login/?next=/education/add/",
+        )
+
+        response = self.login(next_url="/education/")
+        self.assertRedirects(
+            response,
+            "/education/",
+            fetch_redirect_response=False,
+        )
+        self.assertIn("sessionid", response.cookies)
+        self.assertIn("last_login", response.cookies)
+
+    def test_next_from_query_string_is_used_when_form_field_missing(self):
+        response = self.login(query="?next=/experience/")
+
+        self.assertRedirects(
+            response,
+            "/experience/",
+            fetch_redirect_response=False,
+        )
+
+    def test_external_next_is_ignored(self):
+        for evil in (
+            "https://evil.example/",
+            "//evil.example/",
+            "javascript:alert(1)",
+        ):
+            with self.subTest(next=evil):
+                response = self.login(next_url=evil)
+
+                self.assertRedirects(
+                    response,
+                    reverse("main:show_main"),
+                    fetch_redirect_response=False,
+                )
+
+    def test_login_without_next_goes_to_home(self):
+        response = self.login()
+
+        self.assertRedirects(
+            response,
+            reverse("main:show_main"),
+            fetch_redirect_response=False,
+        )
+
+class StarRelationTest(TestCase):
+    """Relasi ManyToMany Education <-> User untuk fitur star."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="star-user",
+            password="password",
+        )
+        self.other = User.objects.create_user(
+            username="star-other",
+            password="password",
+        )
+        self.education = Education.objects.create(
+            nama_sekolah="Universitas Star",
+            tingkat="S1",
+            tahun_masuk=2025,
+        )
+
+    def test_reverse_accessor_lists_starred_education_for_user(self):
+        self.education.starred_by.add(self.user)
+
+        self.assertEqual(
+            list(self.user.starred_education.all()),
+            [self.education],
+        )
+        self.assertEqual(
+            self.other.starred_education.count(),
+            0,
+        )
+
+    def test_same_user_cannot_star_twice(self):
+        self.education.starred_by.add(self.user)
+        self.education.starred_by.add(self.user)
+
+        self.assertEqual(
+            self.education.starred_by.count(),
+            1,
+        )
+
+class EditorGroupMigrationTest(TestCase):
+    def test_editor_group_exists_after_migrate(self):
+        self.assertTrue(
+            Group.objects.filter(name="Editor").exists()
+        )
+
+    def test_user_added_to_group_becomes_editor(self):
+        user = User.objects.create_user(
+            username="new-editor",
+            password="password",
+        )
+        self.assertFalse(is_editor(user))
+
+        user.groups.add(
+            Group.objects.get(name="Editor")
+        )
+
+        self.assertTrue(is_editor(user))
+
+@override_settings(PORTFOLIO_SECRET=SECRET)
+class EditorUpdateWithoutSecretTest(TestCase):
+    """Editor mengubah data tanpa kode rahasia; pemilik tetap wajib memakainya."""
+
+    def setUp(self):
+        Education.objects.all().delete()
+        Experience.objects.all().delete()
+
+        self.editor = User.objects.create_user(
+            username="secret-editor",
+            password="password",
+        )
+        self.editor.groups.add(Group.objects.get(name="Editor"))
+
+        self.owner = User.objects.create_superuser(
+            username="secret-owner",
+            password="password",
+        )
+
+        self.education = Education.objects.create(
+            nama_sekolah="Lama",
+            tingkat="S1",
+            tahun_masuk=2020,
+        )
+        self.experience = Experience.objects.create(
+            title="Lama",
+            description="d",
+            category="research",
+        )
+
+    def education_payload(self, **overrides):
+        data = {
+            "nama_sekolah": "Baru",
+            "tingkat": "S1",
+            "tahun_masuk": 2020,
+        }
+        data.update(overrides)
+        return data
+
+    def experience_payload(self, **overrides):
+        data = {
+            "title": "Baru",
+            "description": "d",
+            "category": "research",
+        }
+        data.update(overrides)
+        return data
+
+    def test_editor_form_has_no_secret_field(self):
+        self.client.force_login(self.editor)
+
+        for url in (
+            reverse("main:update_education", args=[self.education.pk]),
+            reverse("main:update_experience", args=[self.experience.pk]),
+        ):
+            with self.subTest(url=url):
+                self.assertNotContains(
+                    self.client.get(url),
+                    'name="secret"',
+                )
+
+    def test_editor_can_update_education_and_experience_without_secret(self):
+        self.client.force_login(self.editor)
+
+        response = self.client.post(
+            reverse("main:update_education", args=[self.education.pk]),
+            self.education_payload(),
+        )
+        self.assertRedirects(
+            response,
+            reverse("main:show_education"),
+        )
+
+        response = self.client.post(
+            reverse("main:update_experience", args=[self.experience.pk]),
+            self.experience_payload(),
+        )
+        self.assertRedirects(
+            response,
+            reverse("main:show_experience"),
+        )
+
+        self.education.refresh_from_db()
+        self.experience.refresh_from_db()
+
+        self.assertEqual(
+            self.education.nama_sekolah,
+            "Baru",
+        )
+        self.assertEqual(
+            self.experience.title,
+            "Baru",
+        )
+
+    def test_owner_still_needs_secret_to_update(self):
+        self.client.force_login(self.owner)
+
+        url = reverse(
+            "main:update_education",
+            args=[self.education.pk],
+        )
+
+        self.assertContains(
+            self.client.get(url),
+            'name="secret"',
+        )
+
+        self.client.post(
+            url,
+            self.education_payload(),
+        )
+        self.education.refresh_from_db()
+
+        self.assertEqual(
+            self.education.nama_sekolah,
+            "Lama",
+        )
+
+        self.client.post(
+            url,
+            self.education_payload(secret=SECRET),
+        )
+        self.education.refresh_from_db()
+
+        self.assertEqual(
+            self.education.nama_sekolah,
+            "Baru",
+        )
+
+    def test_owner_still_needs_secret_to_create(self):
+        self.client.force_login(self.owner)
+
+        self.assertContains(
+            self.client.get(reverse("main:create_education")),
+            'name="secret"',
+        )
+
+class StarToggleAjaxTest(TestCase):
+    """toggle_star membalas JSON untuk fetch() dan redirect untuk form biasa."""
+
+    AJAX = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
+
+    def setUp(self):
+        Education.objects.all().delete()
+
+        self.user = User.objects.create_user(
+            username="ajax-user",
+            password="password",
+        )
+        self.other = User.objects.create_user(
+            username="ajax-other",
+            password="password",
+        )
+        self.education = Education.objects.create(
+            nama_sekolah="Universitas Ajax",
+            tingkat="S1",
+            tahun_masuk=2025,
+        )
+        self.url = reverse(
+            "main:toggle_star",
+            args=[self.education.pk],
+        )
+
+    def test_ajax_toggle_returns_state_and_total_count(self):
+        self.education.starred_by.add(self.other)
+        self.client.force_login(self.user)
+
+        first = self.client.post(self.url, **self.AJAX)
+        second = self.client.post(self.url, **self.AJAX)
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(
+            first["Content-Type"],
+            "application/json",
+        )
+        self.assertEqual(
+            first.json(),
+            {"starred": True, "star_count": 2},
+        )
+        self.assertEqual(
+            second.json(),
+            {"starred": False, "star_count": 1},
+        )
+        self.assertFalse(
+            self.education.starred_by.filter(
+                pk=self.user.pk
+            ).exists()
+        )
+
+    def test_plain_form_post_still_redirects(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url)
+
+        self.assertRedirects(
+            response,
+            reverse("main:show_education"),
+        )
+
+    def test_ajax_from_visitor_is_redirected_to_login_not_counted(self):
+        response = self.client.post(
+            self.url,
+            **self.AJAX,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(
+            "/login/",
+            response["Location"],
+        )
+        self.assertEqual(
+            self.education.starred_by.count(),
+            0,
+        )
+
+    def test_ajax_unknown_education_returns_404(self):
+        self.client.force_login(self.user)
+
+        url = reverse(
+            "main:toggle_star",
+            args=["00000000-0000-0000-0000-000000000000"],
+        )
+
+        self.assertEqual(
+            self.client.post(url, **self.AJAX).status_code,
+            404,
+        )
+
+    def test_star_button_markup_supports_script_and_accessibility(self):
+        self.education.starred_by.add(self.user)
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse("main:show_education")
+        )
+
+        self.assertContains(response, "data-star-form")
+        self.assertContains(
+            response,
+            'data-school="Universitas Ajax"',
+        )
+        self.assertContains(
+            response,
+            'aria-pressed="true"',
+        )
+        self.assertContains(
+            response,
+            "csrfmiddlewaretoken",
+        )
+        self.assertContains(
+            response,
+            "js/star-toggle.js",
+        )
+
+    def test_visitor_sees_login_link_with_count_but_no_form(self):
+        self.education.starred_by.add(self.other)
+
+        response = self.client.get(
+            reverse("main:show_education")
+        )
+
+        self.assertNotContains(
+            response,
+            "data-star-form",
+        )
+        self.assertContains(
+            response,
+            "Login untuk Star",
+        )
+        self.assertContains(
+            response,
+            "?next=/education/",
+        )
+
+class RoleBadgeTest(TestCase):
+    """Navbar menampilkan peran akun yang sedang login."""
+
+    def setUp(self):
+        self.regular = User.objects.create_user(
+            username="badge-regular",
+            password="password",
+        )
+        self.editor = User.objects.create_user(
+            username="badge-editor",
+            password="password",
+        )
+        self.editor.groups.add(
+            Group.objects.get(name="Editor")
+        )
+        self.owner = User.objects.create_superuser(
+            username="badge-owner",
+            password="password",
+        )
+
+    def badge_for(self, user):
+        if user:
+            self.client.force_login(user)
+
+        return self.client.get(
+            reverse("main:show_main")
+        )
+
+    def test_badge_shows_role_for_each_account_type(self):
+        for user, role in (
+            (self.regular, "User"),
+            (self.editor, "Editor"),
+            (self.owner, "Owner"),
+        ):
+            with self.subTest(role=role):
+                response = self.badge_for(user)
+
+                self.assertEqual(
+                    response.context["user_role"],
+                    role,
+                )
+                self.assertContains(
+                    response,
+                    f"role-badge--{role.lower()}",
+                )
+
+    def test_superuser_who_is_also_in_editor_group_is_shown_as_owner(self):
+        self.owner.groups.add(
+            Group.objects.get(name="Editor")
+        )
+
+        self.assertEqual(
+            self.badge_for(self.owner).context["user_role"],
+            "Owner",
+        )
+
+    def test_visitor_has_no_badge(self):
+        response = self.client.get(
+            reverse("main:show_main")
+        )
+
+        self.assertEqual(
+            response.context["user_role"],
+            "",
+        )
+        self.assertNotContains(
+            response,
+            "role-badge",
+        )

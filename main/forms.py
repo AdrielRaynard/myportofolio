@@ -2,12 +2,14 @@
 
 Isi berkas:
     - SecretCodeField / SecretCodeForm : validasi kode rahasia (lihat catatan keamanan).
+    - OptionalSecretMixin              : menghilangkan field kode rahasia untuk Editor.
     - ExperienceForm                   : Create & Update pengalaman.
     - EducationForm                    : Create & Update pendidikan.
 
 Catatan keamanan:
-    Situs ini publik, sehingga setiap aksi tulis (tambah, ubah, hapus) harus
-    menyertakan kode rahasia yang sama dengan `PORTFOLIO_SECRET` pada `.env`.
+    Situs ini publik, sehingga setiap aksi tulis (tambah, ubah, hapus) oleh
+    pemilik harus menyertakan kode rahasia yang sama dengan `PORTFOLIO_SECRET`
+    pada `.env`. Editor sudah dibatasi lewat group, jadi tidak diminta kode.
 """
 import hmac
 
@@ -48,13 +50,30 @@ class SecretCodeField(forms.CharField):
             )
 
 
+class OptionalSecretMixin:
+    """Membuat field `secret` opsional per pemakaian form.
+
+    Kode rahasia adalah pengaman Tugas 3 (saat situs belum punya login).
+    Sekarang hak akses dicek lewat peran, sehingga Editor tidak perlu tahu
+    kode milik pemilik: view memanggil form dengan `require_secret=False`
+    dan field `secret` dihapus. Default `True` menjaga perilaku lama.
+
+    Mixin ini harus ditulis SEBELUM ModelForm pada daftar basis class.
+    """
+
+    def __init__(self, *args, require_secret=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not require_secret:
+            self.fields.pop("secret", None)
+
+
 class SecretCodeForm(forms.Form):
     """Form minimal untuk aksi yang hanya butuh kode rahasia (mis. hapus data)."""
 
     secret = SecretCodeField()
 
 
-class ExperienceForm(ModelForm):
+class ExperienceForm(OptionalSecretMixin, ModelForm):
     """Form tambah/ubah pengalaman.
 
     Field model : title (Char), description (Text), category (pilihan), thumbnail (URL).
@@ -111,7 +130,7 @@ class ExperienceForm(ModelForm):
             experience.save()
         return experience
 
-class EducationForm(ModelForm):
+class EducationForm(OptionalSecretMixin, ModelForm):
     """Form tambah/ubah riwayat pendidikan (dilindungi kode rahasia)."""
 
     secret = SecretCodeField()

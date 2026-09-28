@@ -8,7 +8,6 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.core import serializers
-from django.core.exceptions import PermissionDenied
 from django.db.models import Count
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -19,6 +18,8 @@ from xhtml2pdf import pisa
 
 from main.forms import EducationForm, ExperienceForm, SecretCodeForm
 from main.models import Education, Experience
+from main.permissions import editor_or_owner_required, owner_required
+from django.utils.http import url_has_allowed_host_and_scheme
 
 OWNER_NAME = "Adriel"
 EDITOR_GROUP_NAME = "Editor"
@@ -43,30 +44,6 @@ EDUCATION_JSON_FIELDS = [
     "tahun_lulus",
     "deskripsi",
 ]
-
-
-# ---------------------------------------------------------------------------
-# Helper authorization
-# ---------------------------------------------------------------------------
-
-def _is_editor(user):
-    """Return True jika user merupakan anggota group Editor."""
-    return (
-        user.is_authenticated
-        and user.groups.filter(name=EDITOR_GROUP_NAME).exists()
-    )
-
-
-def _require_owner(user):
-    """Hanya superuser/pemilik portfolio yang boleh create/delete."""
-    if not user.is_superuser:
-        raise PermissionDenied
-
-
-def _require_editor_or_owner(user):
-    """Editor dan superuser boleh update; user biasa tidak."""
-    if not (user.is_superuser or _is_editor(user)):
-        raise PermissionDenied
 
 
 def _page_context(**extra):
@@ -147,10 +124,18 @@ def _form_view(
     cancel_url,
     success_url,
     success_message,
+    require_secret=True,
 ):
-    """View generik halaman Create/Update berbasis ModelForm."""
+    """View generik halaman Create/Update berbasis ModelForm.
+
+    `require_secret=False` dipakai untuk Editor (otorisasi sudah lewat group).
+    """
     is_post = request.method == "POST"
-    form = form_class(request.POST if is_post else None, instance=instance)
+    form = form_class(
+        request.POST if is_post else None,
+        instance=instance,
+        require_secret=require_secret,
+    )
 
     if is_post and form.is_valid():
         form.save()
@@ -231,14 +216,11 @@ def show_experience(request):
     context = _page_context(
         experience_list=experiences,
         title_query=request.GET.get("title", "").strip(),
-        is_editor=_is_editor(request.user),
     )
     return render(request, "experience.html", context)
 
-
-@login_required(login_url="/login/")
+@owner_required
 def create_experience(request):
-    _require_owner(request.user)
     return _form_view(
         request,
         ExperienceForm,
@@ -250,9 +232,8 @@ def create_experience(request):
     )
 
 
-@login_required(login_url="/login/")
+@editor_or_owner_required
 def update_experience(request, experience_id):
-    _require_editor_or_owner(request.user)
     experience = get_object_or_404(Experience, pk=experience_id)
     return _form_view(
         request,
@@ -263,13 +244,13 @@ def update_experience(request, experience_id):
         cancel_url=reverse("main:show_experience"),
         success_url="main:show_experience",
         success_message="Pengalaman berhasil diperbarui!",
+        require_secret=request.user.is_superuser,
     )
 
 
-@login_required(login_url="/login/")
+@owner_required
 @require_POST
 def delete_experience(request, experience_id):
-    _require_owner(request.user)
     experience = get_object_or_404(Experience, pk=experience_id)
     return _delete_with_secret(
         request,
@@ -310,14 +291,12 @@ def show_education(request):
     context = _page_context(
         education_list=education,
         nama_sekolah_query=request.GET.get("nama_sekolah", "").strip(),
-        is_editor=_is_editor(request.user),
     )
     return render(request, "education.html", context)
 
 
-@login_required(login_url="/login/")
+@owner_required
 def create_education(request):
-    _require_owner(request.user)
     return _form_view(
         request,
         EducationForm,
@@ -329,9 +308,8 @@ def create_education(request):
     )
 
 
-@login_required(login_url="/login/")
+@editor_or_owner_required
 def update_education(request, education_id):
-    _require_editor_or_owner(request.user)
     education = get_object_or_404(Education, pk=education_id)
     return _form_view(
         request,
@@ -342,13 +320,13 @@ def update_education(request, education_id):
         cancel_url=reverse("main:show_education"),
         success_url="main:show_education",
         success_message="Riwayat pendidikan berhasil diperbarui!",
+        require_secret=request.user.is_superuser,
     )
 
 
-@login_required(login_url="/login/")
+@owner_required
 @require_POST
 def delete_education(request, education_id):
-    _require_owner(request.user)
     education = get_object_or_404(Education, pk=education_id)
 
     return _delete_with_secret(
@@ -403,14 +381,25 @@ def register(request):
     }
     return render(request, "register.html", context)
 
+def _safe_next_url(request):
+    """Ambil parameter `next` hanya bila mengarah ke situs ini (cegah open redirect)."""
+    next_url = request.POST.get("next") or request.GET.get("next", "")
+    is_safe = url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    )
+    return next_url if is_safe else ""
+
 
 def login_user(request):
     form = AuthenticationForm(request, data=request.POST or None)
+    next_url = _safe_next_url(request)
 
     if request.method == "POST" and form.is_valid():
         user = form.get_user()
         login(request, user)
-        response = redirect("main:show_main")
+        response = redirect(next_url or "main:show_main")
         response.set_cookie(
             "last_login",
             datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -420,6 +409,7 @@ def login_user(request):
     context = {
         "name": OWNER_NAME,
         "form": form,
+        "next": next_url,
     }
     return render(request, "login.html", context)
 
@@ -435,15 +425,31 @@ def logout_user(request):
 # Star
 # ---------------------------------------------------------------------------
 
-@login_required(login_url="/login/")
+
+def _wants_json(request):
+    """True bila request berasal dari fetch() halaman (bukan submit form biasa)."""
+    return request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+@login_required
 @require_POST
 def toggle_star(request, education_id):
-    """Toggle satu star per user pada Education tertentu."""
+    """Toggle satu star per user pada Education tertentu.
+    - Request dari JavaScript (header `X-Requested-With`): balas JSON
+    `{"starred": bool, "star_count": int}` agar halaman diperbarui tanpa reload.
+    - Submit form biasa (tanpa JS): redirect kembali ke halaman Education.
+    """
     education = get_object_or_404(Education, pk=education_id)
 
     if education.starred_by.filter(pk=request.user.pk).exists():
         education.starred_by.remove(request.user)
+        starred = False
     else:
         education.starred_by.add(request.user)
+        starred = True
+
+    if _wants_json(request):
+        return JsonResponse(
+            {"starred": starred, "star_count": education.starred_by.count()}
+        )
 
     return redirect("main:show_education")
