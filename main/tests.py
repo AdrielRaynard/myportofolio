@@ -1365,3 +1365,140 @@ class EditorGroupMigrationTest(TestCase):
         )
 
         self.assertTrue(is_editor(user))
+
+@override_settings(PORTFOLIO_SECRET=SECRET)
+class EditorUpdateWithoutSecretTest(TestCase):
+    """Editor mengubah data tanpa kode rahasia; pemilik tetap wajib memakainya."""
+
+    def setUp(self):
+        Education.objects.all().delete()
+        Experience.objects.all().delete()
+
+        self.editor = User.objects.create_user(
+            username="secret-editor",
+            password="password",
+        )
+        self.editor.groups.add(Group.objects.get(name="Editor"))
+
+        self.owner = User.objects.create_superuser(
+            username="secret-owner",
+            password="password",
+        )
+
+        self.education = Education.objects.create(
+            nama_sekolah="Lama",
+            tingkat="S1",
+            tahun_masuk=2020,
+        )
+        self.experience = Experience.objects.create(
+            title="Lama",
+            description="d",
+            category="research",
+        )
+
+    def education_payload(self, **overrides):
+        data = {
+            "nama_sekolah": "Baru",
+            "tingkat": "S1",
+            "tahun_masuk": 2020,
+        }
+        data.update(overrides)
+        return data
+
+    def experience_payload(self, **overrides):
+        data = {
+            "title": "Baru",
+            "description": "d",
+            "category": "research",
+        }
+        data.update(overrides)
+        return data
+
+    def test_editor_form_has_no_secret_field(self):
+        self.client.force_login(self.editor)
+
+        for url in (
+            reverse("main:update_education", args=[self.education.pk]),
+            reverse("main:update_experience", args=[self.experience.pk]),
+        ):
+            with self.subTest(url=url):
+                self.assertNotContains(
+                    self.client.get(url),
+                    'name="secret"',
+                )
+
+    def test_editor_can_update_education_and_experience_without_secret(self):
+        self.client.force_login(self.editor)
+
+        response = self.client.post(
+            reverse("main:update_education", args=[self.education.pk]),
+            self.education_payload(),
+        )
+        self.assertRedirects(
+            response,
+            reverse("main:show_education"),
+        )
+
+        response = self.client.post(
+            reverse("main:update_experience", args=[self.experience.pk]),
+            self.experience_payload(),
+        )
+        self.assertRedirects(
+            response,
+            reverse("main:show_experience"),
+        )
+
+        self.education.refresh_from_db()
+        self.experience.refresh_from_db()
+
+        self.assertEqual(
+            self.education.nama_sekolah,
+            "Baru",
+        )
+        self.assertEqual(
+            self.experience.title,
+            "Baru",
+        )
+
+    def test_owner_still_needs_secret_to_update(self):
+        self.client.force_login(self.owner)
+
+        url = reverse(
+            "main:update_education",
+            args=[self.education.pk],
+        )
+
+        self.assertContains(
+            self.client.get(url),
+            'name="secret"',
+        )
+
+        self.client.post(
+            url,
+            self.education_payload(),
+        )
+        self.education.refresh_from_db()
+
+        self.assertEqual(
+            self.education.nama_sekolah,
+            "Lama",
+        )
+
+        self.client.post(
+            url,
+            self.education_payload(secret=SECRET),
+        )
+        self.education.refresh_from_db()
+
+        self.assertEqual(
+            self.education.nama_sekolah,
+            "Baru",
+        )
+
+    def test_owner_still_needs_secret_to_create(self):
+        self.client.force_login(self.owner)
+
+        self.assertContains(
+            self.client.get(reverse("main:create_education")),
+            'name="secret"',
+        )

@@ -124,10 +124,18 @@ def _form_view(
     cancel_url,
     success_url,
     success_message,
+    require_secret=True,
 ):
-    """View generik halaman Create/Update berbasis ModelForm."""
+    """View generik halaman Create/Update berbasis ModelForm.
+
+    `require_secret=False` dipakai untuk Editor (otorisasi sudah lewat group).
+    """
     is_post = request.method == "POST"
-    form = form_class(request.POST if is_post else None, instance=instance)
+    form = form_class(
+        request.POST if is_post else None,
+        instance=instance,
+        require_secret=require_secret,
+    )
 
     if is_post and form.is_valid():
         form.save()
@@ -236,6 +244,7 @@ def update_experience(request, experience_id):
         cancel_url=reverse("main:show_experience"),
         success_url="main:show_experience",
         success_message="Pengalaman berhasil diperbarui!",
+        require_secret=request.user.is_superuser,
     )
 
 
@@ -311,6 +320,7 @@ def update_education(request, education_id):
         cancel_url=reverse("main:show_education"),
         success_url="main:show_education",
         success_message="Riwayat pendidikan berhasil diperbarui!",
+        require_secret=request.user.is_superuser,
     )
 
 
