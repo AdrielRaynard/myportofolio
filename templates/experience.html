@@ -61,7 +61,7 @@
                         {% if user.is_superuser or is_editor %}
                             <div class="card-actions">
                                 <a href="{% url 'main:update_experience' experience.id %}"
-                                   class="button button-secondary">
+                                class="button button-secondary">
                                     Ubah
                                 </a>
 
@@ -71,9 +71,9 @@
                                 {% endif %}
                             </div>
                         {% endif %}
-                    </article>
-                {% empty %}
-                    {% if title_query %}
+                        </article>
+                        {% empty %}
+                        {% if title_query %}
 ```
 
 

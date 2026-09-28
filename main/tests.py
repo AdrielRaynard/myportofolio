@@ -32,6 +32,14 @@ class MainTest(TestCase):
         self.assertNotContains(response, self.experience.title)
         self.assertContains(response, f'href="{reverse("main:show_experience")}"')
 
+    def test_experience_page_has_no_stray_markdown_fences(self):
+        """Regresi: sisa ``` hasil salin markdown pernah ikut tampil di kartu."""
+        response = self.client.get(reverse("main:show_experience"))
+        self.assertNotContains(response, "```")
+
+        empty = self.client.get(reverse("main:show_experience"), {"title": "tidak-ada"})
+        self.assertNotContains(empty, "```")
+
     def test_nonexistent_page_returns_404(self):
         response = self.client.get("/halaman-yang-tidak-ada/")
 
@@ -1154,3 +1162,14 @@ class AuthorizationAndStarTest(TestCase):
         self.assertNotIn("starred_by", data[0]["fields"])
         # Cek username (bukan pk): angka pk mudah "kebetulan" muncul di dalam UUID.
         self.assertNotIn(self.regular.username, response.content.decode())
+
+class AuthPagesTest(TestCase):
+    """Halaman login/register memakai base.html dengan tepat satu <title>."""
+
+    def test_login_and_register_have_single_title(self):
+        for url_name, label in (("main:login", "Login"), ("main:register", "Register")):
+            with self.subTest(page=url_name):
+                html = self.client.get(reverse(url_name)).content.decode()
+
+                self.assertEqual(html.count("<title>"), 1)
+                self.assertIn(f"<title>{label} - Adriel</title>", html)
