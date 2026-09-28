@@ -1639,3 +1639,73 @@ class StarToggleAjaxTest(TestCase):
             response,
             "?next=/education/",
         )
+
+class RoleBadgeTest(TestCase):
+    """Navbar menampilkan peran akun yang sedang login."""
+
+    def setUp(self):
+        self.regular = User.objects.create_user(
+            username="badge-regular",
+            password="password",
+        )
+        self.editor = User.objects.create_user(
+            username="badge-editor",
+            password="password",
+        )
+        self.editor.groups.add(
+            Group.objects.get(name="Editor")
+        )
+        self.owner = User.objects.create_superuser(
+            username="badge-owner",
+            password="password",
+        )
+
+    def badge_for(self, user):
+        if user:
+            self.client.force_login(user)
+
+        return self.client.get(
+            reverse("main:show_main")
+        )
+
+    def test_badge_shows_role_for_each_account_type(self):
+        for user, role in (
+            (self.regular, "User"),
+            (self.editor, "Editor"),
+            (self.owner, "Owner"),
+        ):
+            with self.subTest(role=role):
+                response = self.badge_for(user)
+
+                self.assertEqual(
+                    response.context["user_role"],
+                    role,
+                )
+                self.assertContains(
+                    response,
+                    f"role-badge--{role.lower()}",
+                )
+
+    def test_superuser_who_is_also_in_editor_group_is_shown_as_owner(self):
+        self.owner.groups.add(
+            Group.objects.get(name="Editor")
+        )
+
+        self.assertEqual(
+            self.badge_for(self.owner).context["user_role"],
+            "Owner",
+        )
+
+    def test_visitor_has_no_badge(self):
+        response = self.client.get(
+            reverse("main:show_main")
+        )
+
+        self.assertEqual(
+            response.context["user_role"],
+            "",
+        )
+        self.assertNotContains(
+            response,
+            "role-badge",
+        )
