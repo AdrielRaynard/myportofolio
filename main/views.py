@@ -27,6 +27,8 @@ from main.forms import EducationForm, ExperienceForm, SecretCodeForm
 from main.models import Education, Experience
 from main.permissions import editor_or_owner_required, owner_required
 
+from django.views.decorators.http import require_POST
+
 OWNER_NAME = "Adriel"
 
 # Field yang boleh keluar lewat endpoint JSON.
@@ -276,14 +278,48 @@ def delete_experience(request, experience_id):
 
 @require_safe
 def get_education_json(request):
-    """Daftar pendidikan dalam JSON. Filter opsional: `?nama_sekolah=<kata kunci>`."""
     nama_sekolah_query = request.GET.get("nama_sekolah", "").strip()
-    education = Education.objects.all()
+    educations = Education.objects.prefetch_related("starred_by").all()
 
     if nama_sekolah_query:
-        education = education.filter(nama_sekolah__icontains=nama_sekolah_query)
+        educations = educations.filter(
+            nama_sekolah__icontains=nama_sekolah_query
+        )
 
-    return _json_response(education, EDUCATION_JSON_FIELDS)
+    data = []
+
+    for education in educations:
+        starred_users = education.starred_by.all()
+
+        is_starred = (
+            request.user in starred_users
+            if request.user.is_authenticated
+            else False
+        )
+
+        starred_by_names = ", ".join(
+            [user.username for user in starred_users]
+        )
+
+        data.append({
+            "pk": str(education.id),
+            "fields": {
+                "nama_sekolah": education.nama_sekolah,
+                "tingkat": education.tingkat,
+                "tingkat_display": education.get_tingkat_display(),
+                "jurusan": education.jurusan,
+                "tahun_masuk": education.tahun_masuk,
+                "tahun_lulus": education.tahun_lulus,
+                "deskripsi": education.deskripsi,
+                "period_display": education.period_display,
+                "is_ongoing": education.is_ongoing,
+                "star_count": starred_users.count(),
+                "is_starred": is_starred,
+                "starred_by_names": starred_by_names,
+            },
+        })
+
+    return JsonResponse(data, safe=False)
 
 
 @require_safe
@@ -294,16 +330,14 @@ def get_education_detail_json(request, education_id):
 
 @require_safe
 def show_education(request):
-    """Halaman Education: data diambil dari JSON lalu dideserialisasi."""
-    education = _objects_from_json(get_education_json(request))
-    _attach_education_star_state(request, education)
+    title_query = request.GET.get("title", "").strip()
 
-    context = _page_context(
-        education_list=education,
-        nama_sekolah_query=request.GET.get("nama_sekolah", "").strip(),
-    )
+    context = {
+        "name": "Burhan",
+        "title_query": title_query,
+        "form": EducationForm(),
+    }
     return render(request, "education.html", context)
-
 
 @owner_required
 def create_education(request):
@@ -473,3 +507,21 @@ def toggle_star(request, education_id):
         )
 
     return redirect("main:show_education")
+
+@require_POST
+def create_education_ajax(request):
+    if not request.user.is_superuser:
+        return JsonResponse(
+            {"message": "Hanya pemilik portofolio yang dapat menambahkan education."},
+            status=403,
+        )
+
+    form = EducationForm(request.POST)
+    if form.is_valid():
+        education = form.save()
+        return JsonResponse(
+            {"message": "Education berhasil ditambahkan.", "pk": str(education.id)},
+            status=201,
+        )
+
+    return JsonResponse({"errors": form.errors.get_json_data()}, status=400)

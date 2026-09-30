@@ -21,7 +21,7 @@ from django.forms import ModelForm, NumberInput, Select, Textarea, TextInput, UR
 from django.utils import timezone
 
 from main.models import Education, Experience
-
+from django.utils.html import strip_tags
 
 class SecretCodeField(forms.CharField):
     """Field password yang otomatis tervalidasi terhadap `settings.PORTFOLIO_SECRET`.
@@ -161,17 +161,31 @@ class EducationForm(OptionalSecretMixin, ModelForm):
 
         widgets = {
             "nama_sekolah": TextInput(
-                attrs={"placeholder": "Universitas Indonesia", "maxlength": 255}
+                attrs={
+                    "placeholder": "Universitas Indonesia",
+                    "maxlength": 255,
+                }
             ),
             "tingkat": Select(),
             "jurusan": TextInput(
-                attrs={"placeholder": "Sistem Informasi", "maxlength": 255}
+                attrs={
+                    "placeholder": "Sistem Informasi",
+                    "maxlength": 255,
+                }
             ),
             "tahun_masuk": NumberInput(
-                attrs={"placeholder": "2025", "min": 1900, "max": 2100}
+                attrs={
+                    "placeholder": "2025",
+                    "min": 1900,
+                    "max": 2100,
+                }
             ),
             "tahun_lulus": NumberInput(
-                attrs={"placeholder": "2029", "min": 1900, "max": 2100}
+                attrs={
+                    "placeholder": "2029",
+                    "min": 1900,
+                    "max": 2100,
+                }
             ),
             "deskripsi": Textarea(
                 attrs={
@@ -181,9 +195,32 @@ class EducationForm(OptionalSecretMixin, ModelForm):
             ),
         }
 
+    def clean_nama_sekolah(self):
+        nama_sekolah = strip_tags(
+            self.cleaned_data["nama_sekolah"]
+        ).strip()
+
+        if not nama_sekolah:
+            raise ValidationError(
+                "Nama sekolah / universitas tidak boleh hanya berisi tag HTML."
+            )
+
+        return nama_sekolah
+
+    def clean_jurusan(self):
+        return strip_tags(
+            self.cleaned_data["jurusan"]
+        ).strip()
+
+    def clean_deskripsi(self):
+        return strip_tags(
+            self.cleaned_data["deskripsi"]
+        ).strip()
+
     def clean(self):
         """Validasi lintas-field: tahun lulus tidak boleh sebelum tahun masuk."""
         cleaned_data = super().clean()
+
         tahun_masuk = cleaned_data.get("tahun_masuk")
         tahun_lulus = cleaned_data.get("tahun_lulus")
 
