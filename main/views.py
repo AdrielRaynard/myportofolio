@@ -14,7 +14,6 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.core import serializers
-from django.db.models import Count
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -25,9 +24,7 @@ from xhtml2pdf import pisa
 
 from main.forms import EducationForm, ExperienceForm, SecretCodeForm
 from main.models import Education, Experience
-from main.permissions import editor_or_owner_required, owner_required
-
-from django.views.decorators.http import require_POST
+from main.permissions import editor_or_owner_required, is_owner, owner_required
 
 OWNER_NAME = "Adriel"
 
@@ -92,33 +89,6 @@ def _objects_from_json(json_response):
     """Deserialisasi respons JSON kembali menjadi list model instance."""
     payload = json_response.content.decode("utf-8")
     return [item.object for item in serializers.deserialize("json", payload)]
-
-
-def _attach_education_star_state(request, education_list):
-    """Tambahkan jumlah star dan status star user ke object hasil deserialisasi JSON."""
-    education_ids = [item.pk for item in education_list]
-
-    if not education_ids:
-        return
-
-    star_counts = dict(
-        Education.objects.filter(pk__in=education_ids)
-        .annotate(star_count=Count("starred_by"))
-        .values_list("pk", "star_count")
-    )
-
-    starred_ids = set()
-    if request.user.is_authenticated:
-        starred_ids = set(
-            Education.objects.filter(
-                pk__in=education_ids,
-                starred_by=request.user,
-            ).values_list("pk", flat=True)
-        )
-
-    for education in education_list:
-        education.star_count = star_counts.get(education.pk, 0)
-        education.user_has_starred = education.pk in starred_ids
 
 
 def _form_view(
@@ -278,31 +248,36 @@ def delete_experience(request, experience_id):
 
 @require_safe
 def get_education_json(request):
-    nama_sekolah_query = request.GET.get("nama_sekolah", "").strip()
-    educations = Education.objects.prefetch_related("starred_by").all()
+    """Daftar education dalam JSON yang disusun manual (JsonResponse).
 
-    if nama_sekolah_query:
-        educations = educations.filter(
-            nama_sekolah__icontains=nama_sekolah_query
+    Dipakai oleh halaman Education untuk memuat data lewat AJAX (fetch) dan
+    sekaligus sebagai endpoint JSON Data Delivery. Query pencarian opsional:
+    `?nama_sekolah=<kata kunci>` (tidak peka huruf besar/kecil).
+
+    Selain field model, respons memuat info star dari Tugas 4:
+        - star_count : jumlah pengguna yang memberi star.
+        - is_starred : apakah pengguna yang sedang login sudah memberi star.
+        - starred_by_names : daftar username pemberi star (untuk tooltip).
+    """
+    keyword = request.GET.get("nama_sekolah", "").strip()
+    educations = Education.objects.all()
+
+    if keyword:
+        educations = educations.filter(nama_sekolah__icontains=keyword)
+
+    # Sekali query: id education yang sudah diberi star oleh user saat ini.
+    starred_pks = set()
+    if request.user.is_authenticated:
+        starred_pks = set(
+            Education.objects.filter(starred_by=request.user).values_list("pk", flat=True)
         )
 
     data = []
-
-    for education in educations:
+    for education in educations.prefetch_related("starred_by"):
         starred_users = education.starred_by.all()
 
-        is_starred = (
-            request.user in starred_users
-            if request.user.is_authenticated
-            else False
-        )
-
-        starred_by_names = ", ".join(
-            [user.username for user in starred_users]
-        )
-
         data.append({
-            "pk": str(education.id),
+            "pk": str(education.pk),
             "fields": {
                 "nama_sekolah": education.nama_sekolah,
                 "tingkat": education.tingkat,
@@ -313,9 +288,9 @@ def get_education_json(request):
                 "deskripsi": education.deskripsi,
                 "period_display": education.period_display,
                 "is_ongoing": education.is_ongoing,
-                "star_count": starred_users.count(),
-                "is_starred": is_starred,
-                "starred_by_names": starred_by_names,
+                "star_count": len(starred_users),
+                "is_starred": education.pk in starred_pks,
+                "starred_by_names": ", ".join(user.username for user in starred_users),
             },
         })
 
@@ -330,14 +305,17 @@ def get_education_detail_json(request, education_id):
 
 @require_safe
 def show_education(request):
-    title_query = request.GET.get("title", "").strip()
+    """Kerangka halaman Education; datanya diambil klien lewat endpoint JSON.
 
-    context = {
-        "name": "Burhan",
-        "title_query": title_query,
-        "form": EducationForm(),
-    }
-    return render(request, "education.html", context)
+    `form` hanya dibutuhkan oleh modal tambah education yang dirender untuk
+    pemilik (superuser); pengguna lain mengabaikannya.
+    """
+    return render(
+        request,
+        "education.html",
+        _page_context(form=EducationForm()),
+    )
+
 
 @owner_required
 def create_education(request):
@@ -381,6 +359,48 @@ def delete_education(request, education_id):
         education,
         success_url="main:show_education",
         success_message="Riwayat pendidikan berhasil dihapus!",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Education AJAX
+# ---------------------------------------------------------------------------
+
+@require_POST
+def create_education_ajax(request):
+    """Endpoint AJAX untuk modal tambah education pada halaman Education.
+
+    Hak akses peran dari Tugas 4 diperiksa DI SINI (bukan hanya menyembunyikan
+    tombol di template): hanya pemilik portofolio (superuser) yang boleh
+    menambah data. Input divalidasi `EducationForm` (ModelForm) yang juga
+    membersihkan teks dengan `strip_tags`.
+
+    Balasan JSON:
+        201 : berhasil, memuat `pk` data baru.
+        400 : validasi gagal, memuat `errors` per field.
+        403 : pemanggil bukan pemilik (pengunjung, pengguna, maupun editor).
+    """
+    if not is_owner(request.user):
+        return JsonResponse(
+            {"message": "Hanya pemilik portofolio yang dapat menambahkan education."},
+            status=403,
+        )
+
+    form = EducationForm(request.POST)
+
+    if not form.is_valid():
+        return JsonResponse(
+            {"errors": form.errors.get_json_data()},
+            status=400,
+        )
+
+    education = form.save()
+    return JsonResponse(
+        {
+            "message": "Education berhasil ditambahkan.",
+            "pk": str(education.pk),
+        },
+        status=201,
     )
 
 
@@ -507,21 +527,3 @@ def toggle_star(request, education_id):
         )
 
     return redirect("main:show_education")
-
-@require_POST
-def create_education_ajax(request):
-    if not request.user.is_superuser:
-        return JsonResponse(
-            {"message": "Hanya pemilik portofolio yang dapat menambahkan education."},
-            status=403,
-        )
-
-    form = EducationForm(request.POST)
-    if form.is_valid():
-        education = form.save()
-        return JsonResponse(
-            {"message": "Education berhasil ditambahkan.", "pk": str(education.id)},
-            status=201,
-        )
-
-    return JsonResponse({"errors": form.errors.get_json_data()}, status=400)
