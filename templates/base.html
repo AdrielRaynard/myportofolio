@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <script src="{% static 'js/utils.js' %}" defer></script>
     <script src="{% static 'js/live-search.js' %}" defer></script>
     <script src="{% static 'js/star-toggle.js' %}" defer></script>
     {% block meta %}{% endblock meta %}
@@ -17,7 +18,7 @@
     {# Dark mode memakai CSS checkbox hack: checkbox ini WAJIB berada tepat sebelum .site-wrapper (sibling). #}
     <input type="checkbox" id="theme-toggle" class="theme-toggle-input">
 
-        <div class="site-wrapper">
+    <div class="site-wrapper">
         <header class="site-header">
             <div class="container">
                 <a href="{% url 'main:show_main' %}" class="brand">{{ name }}</a>
@@ -49,15 +50,9 @@
             </div>
         </footer>
     </div>
-    <!-- Kode footer kamu sebelumnya -->
-    <footer class="site-footer">
-        <div class="container">
-            <p>&copy; 2026 {{ name }}. Fakultas Ilmu Komputer, Universitas Indonesia.</p>
-        </div>
-    </footer>
-    
+
     {% include 'components/toast.html' %}
-</body>
-</html>
+
+    {% block scripts %}{% endblock scripts %}
 </body>
 </html>
