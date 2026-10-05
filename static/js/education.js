@@ -1,6 +1,7 @@
 /**
  * Logika klien halaman Education (pemuatan data end-to-end lewat AJAX).
  *
+ * Tanggung jawab:
  *   1. Memuat daftar education dari endpoint JSON (`main:get_education_json`)
  *      memakai fetch(), lengkap dengan kondisi loading / kosong / error.
  *   2. Pencarian berdasarkan nama pendidikan dengan debouncing 300 ms,
@@ -11,6 +12,8 @@
  *   4. Proteksi XSS: setiap nilai teks dari server di-escape dengan
  *      escapeHtml() (static/js/utils.js) sebelum disisipkan ke HTML, dan
  *      server sendiri sudah membersihkan input dengan strip_tags.
+ *   5. Shortcut keyboard: "/" memfokuskan pencarian, Esc membersihkan
+ *      filter bila fokus berada di kolom pencarian.
  *
  * Elemen khusus peran (modal tambah, tombol hapus) hanya ada untuk pemilik,
  * jadi keberadaannya selalu diperiksa sebelum event listener dipasang.
@@ -310,6 +313,30 @@
             fetchEducations(elements.searchInput.value.trim());
         });
     }
+
+    // ------------------------------------------------- Shortcut keyboard
+
+    // "/" memfokuskan kolom pencarian dari mana saja (kecuali sedang mengetik
+    // di field lain atau ada popover terbuka), Esc membersihkan filter bila
+    // fokus sedang berada di kolom pencarian. Modal tambah/hapus tidak perlu
+    // ditangani karena popover="auto" sudah ditutup Esc oleh browser.
+    document.addEventListener("keydown", (event) => {
+        const target = event.target;
+        const isTyping = target instanceof HTMLElement
+            && (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)
+                || target.isContentEditable);
+
+        if (event.key === "/" && !isTyping && !document.querySelector(":popover-open")) {
+            event.preventDefault();
+            elements.searchInput.focus();
+            return;
+        }
+
+        if (event.key === "Escape" && target === elements.searchInput && elements.searchInput.value) {
+            elements.searchInput.value = "";
+            fetchEducations("");
+        }
+    });
 
     // ------------------------------------------------------- Tambah (modal)
 
