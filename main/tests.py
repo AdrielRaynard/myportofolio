@@ -827,6 +827,15 @@ class EducationFormTest(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         self.assertTrue(form.save().is_ongoing)
 
+    def test_empty_jurusan_is_saved_as_null_not_the_string_none(self):
+        """Regresi: jurusan kosong tidak boleh tersimpan sebagai teks "None"."""
+        form = EducationForm(self.valid_data(jurusan=""))
+
+        self.assertTrue(form.is_valid(), form.errors)
+        education = form.save()
+
+        self.assertIsNone(education.jurusan)
+
     def test_graduation_year_cannot_precede_entry_year(self):
         form = EducationForm(self.valid_data(tahun_masuk=2025, tahun_lulus=2020))
 

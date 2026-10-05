@@ -208,9 +208,10 @@ class EducationForm(OptionalSecretMixin, ModelForm):
         return nama_sekolah
 
     def clean_jurusan(self):
-        return strip_tags(
-            self.cleaned_data["jurusan"]
-        ).strip()
+        jurusan = self.cleaned_data.get("jurusan")
+        # null=True: input kosong diubah Django menjadi None. strip_tags(None)
+        # menghasilkan teks "None", jadi nilai kosong dikembalikan apa adanya.
+        return strip_tags(jurusan).strip() if jurusan else None
 
     def clean_deskripsi(self):
         return strip_tags(
