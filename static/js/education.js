@@ -96,8 +96,10 @@
         }
 
         const starLabel = education.is_starred ? "Unstar" : "Star";
+        // Username pemberi star sengaja tidak dikirim server; tooltip
+        // hanya menampilkan jumlah agar identitas pengguna tetap privat.
         const starTitle = education.star_count > 0
-            ? `Dibintangi oleh ${escapeHtml(education.starred_by_names)}`
+            ? `Dibintangi oleh ${education.star_count} orang`
             : "Jadilah yang pertama memberi star";
 
         return `

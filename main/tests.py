@@ -451,13 +451,20 @@ class EducationJsonTest(TestCase):
         self.assertEqual(fields_by_pk[str(self.smak.pk)]["star_count"], 0)
         self.assertFalse(fields_by_pk[str(self.smak.pk)]["is_starred"])
 
-    def test_list_json_marks_nothing_starred_for_visitor(self):
-        self.ui.starred_by.add(User.objects.create_user(username="someone", password="password"))
+    def test_list_json_does_not_expose_star_giver_usernames(self):
+        """Regresi: respons publik tidak boleh memuat identitas pemberi star.
 
-        data = json.loads(self.client.get(reverse("main:get_education_json")).content)
+        Star sengaja ditambahkan dulu sebelum request anonim, agar lolos/tidak
+        nya test tidak sekadar karena database uji masih kosong.
+        """
+        giver = User.objects.create_user(username="stargiver-rahasia", password="password")
+        self.ui.starred_by.add(giver)
 
-        self.assertTrue(all(item["fields"]["is_starred"] is False for item in data))
-        self.assertEqual(data[0]["fields"]["star_count"], 1)
+        response = self.client.get(reverse("main:get_education_json"))
+        content = response.content.decode()
+
+        self.assertNotIn("stargiver-rahasia", content)
+        self.assertNotIn("starred_by_names", content)
 
     def test_education_page_loads_data_via_ajax_script(self):
         """Kerangka halaman memuat konfigurasi JSON + skrip education.js."""

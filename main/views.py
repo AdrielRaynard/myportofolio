@@ -25,6 +25,7 @@ from xhtml2pdf import pisa
 from main.forms import EducationForm, ExperienceForm, SecretCodeForm
 from main.models import Education, Experience
 from main.permissions import editor_or_owner_required, is_owner, owner_required
+from django.db.models import Count
 
 OWNER_NAME = "Adriel"
 
@@ -257,7 +258,11 @@ def get_education_json(request):
     Selain field model, respons memuat info star dari Tugas 4:
         - star_count : jumlah pengguna yang memberi star.
         - is_starred : apakah pengguna yang sedang login sudah memberi star.
-        - starred_by_names : daftar username pemberi star (untuk tooltip).
+
+    Identitas pemberi star (username maupun ID) sengaja TIDAK dikirim ke klien
+    mana pun — jumlah star sudah cukup untuk UI, dan daftar siapa yang memberi
+    star adalah data pribadi pengguna lain. Ini selaras dengan whitelist field
+    yang juga tidak menyertakan relasi `starred_by`.
     """
     keyword = request.GET.get("nama_sekolah", "").strip()
     educations = Education.objects.all()
@@ -272,10 +277,14 @@ def get_education_json(request):
             Education.objects.filter(starred_by=request.user).values_list("pk", flat=True)
         )
 
-    data = []
-    for education in educations.prefetch_related("starred_by"):
-        starred_users = education.starred_by.all()
+    # Agregasi di database: hitung star tanpa memuat baris User sama sekali,
+    # sehingga identitas pemberi star tidak pernah menyentuh respons.
+    # Queryset ber-GROUP BY mengabaikan Meta.ordering (perilaku Django untuk
+    # query agregasi), jadi urutan dinyatakan eksplisit di sini.
+    educations = educations.annotate(star_count=Count("starred_by")).order_by("-tahun_masuk")
 
+    data = []
+    for education in educations:
         data.append({
             "pk": str(education.pk),
             "fields": {
@@ -288,14 +297,12 @@ def get_education_json(request):
                 "deskripsi": education.deskripsi,
                 "period_display": education.period_display,
                 "is_ongoing": education.is_ongoing,
-                "star_count": len(starred_users),
+                "star_count": education.star_count,
                 "is_starred": education.pk in starred_pks,
-                "starred_by_names": ", ".join(user.username for user in starred_users),
             },
         })
 
     return JsonResponse(data, safe=False)
-
 
 @require_safe
 def get_education_detail_json(request, education_id):
