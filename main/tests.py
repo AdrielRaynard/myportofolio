@@ -469,6 +469,23 @@ class EducationJsonTest(TestCase):
         self.assertContains(response, 'id="csrf-token-holder"')
         self.assertContains(response, "csrfmiddlewaretoken")
 
+    def test_education_script_registers_keyboard_shortcuts(self):
+        """Shortcut "/" fokus pencarian dan Esc membersihkan filter harus terpasang."""
+        js_source = (
+            Path(settings.BASE_DIR) / "static" / "js" / "education.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('"keydown"', js_source)
+        self.assertIn('event.key === "/"', js_source)
+        self.assertIn('"Escape"', js_source)
+        self.assertIn("fetchEducations(\"\")", js_source)
+        # "/" tidak boleh mati selama toast (popover="manual") tampil, dan
+        # tidak boleh menembak saat modal popover="auto" terbuka/modifier ditekan.
+        self.assertIn('[popover="auto"]:popover-open', js_source)
+        self.assertIn("event.ctrlKey", js_source)
+        self.assertIn("event.metaKey", js_source)
+        self.assertIn("event.altKey", js_source)
+
 
 SECRET = "rahasia-test"
 

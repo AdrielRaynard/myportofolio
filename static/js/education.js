@@ -64,6 +64,16 @@
         return input ? input.value : "";
     }
 
+    /**
+     * Label ramah untuk nama field form, dibaca dari <label> di modal.
+     * Dipakai untuk menampilkan pesan validasi server beserta nama fieldnya.
+     */
+    function fieldLabel(fieldName) {
+        const input = elements.addForm?.querySelector(`[name="${fieldName}"]`);
+        const label = input?.closest(".form-group")?.querySelector("label");
+        return label ? label.textContent.trim() : fieldName.replaceAll("_", " ");
+    }
+
     // ------------------------------------------------------------- Rendering
 
     /**
@@ -317,16 +327,26 @@
     // ------------------------------------------------- Shortcut keyboard
 
     // "/" memfokuskan kolom pencarian dari mana saja (kecuali sedang mengetik
-    // di field lain atau ada popover terbuka), Esc membersihkan filter bila
-    // fokus sedang berada di kolom pencarian. Modal tambah/hapus tidak perlu
-    // ditangani karena popover="auto" sudah ditutup Esc oleh browser.
+    // di field lain, menekan tombol modifier, atau ada popover terbuka), Esc
+    // membersihkan filter bila fokus sedang berada di kolom pencarian. Modal
+    // tambah/hapus tidak perlu ditangani karena popover="auto" sudah ditutup
+    // Esc oleh browser.
     document.addEventListener("keydown", (event) => {
         const target = event.target;
         const isTyping = target instanceof HTMLElement
             && (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)
                 || target.isContentEditable);
 
-        if (event.key === "/" && !isTyping && !document.querySelector(":popover-open")) {
+        if (event.key === "/"
+            && !isTyping
+            && !event.ctrlKey
+            && !event.metaKey
+            && !event.altKey
+            // Hanya popover="auto" (modal). Toast memakai popover="manual",
+            // jadi selector :popover-open saja akan ikut mencocokkannya dan
+            // mematikan shortcut selama toast masih tampil.
+            && !document.querySelector('[popover="auto"]:popover-open')
+        ) {
             event.preventDefault();
             elements.searchInput.focus();
             return;
@@ -367,11 +387,13 @@
                 showToast("Berhasil", "Education baru berhasil ditambahkan!", "success");
                 fetchEducations(elements.searchInput.value.trim());
             } else if (result.errors) {
-                // Gabungkan semua pesan validasi per field dari server (400).
-                const errorMessages = Object.values(result.errors)
-                    .flat()
-                    .map((error) => error.message);
-                showToast("Gagal menambahkan education", errorMessages.join(" "), "error");
+                // Pesan validasi per field dari server (400), diberi label
+                // field agar pengguna tahu input mana yang perlu diperbaiki.
+                const errorMessages = Object.entries(result.errors)
+                    .flatMap(([field, errors]) =>
+                        errors.map((error) => `${fieldLabel(field)}: ${error.message}`)
+                    );
+                showToast("Gagal menambahkan education", errorMessages.join(" · "), "error");
             } else {
                 // Kegagalan non-validasi (mis. 403 tanpa hak akses).
                 showToast(
