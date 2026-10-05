@@ -14,6 +14,8 @@ from django.core.exceptions import ValidationError
 from main.forms import EducationForm, ExperienceForm, SecretCodeField, SecretCodeForm
 from main.models import Experience, Education
 from main.permissions import can_edit, is_editor, is_owner
+from pathlib import Path
+from django.conf import settings
 
 
 
@@ -103,14 +105,34 @@ class EducationTest(TestCase):
         self.assertTrue(self.education.is_ongoing)
         self.assertEqual(self.education.period_display, "2023 - Sekarang")
 
-    def test_education_page_shows_data_when_available(self):
+    def test_education_page_renders_ajax_skeleton_without_server_side_data(self):
+        """Halaman hanya kerangka; data harus datang dari endpoint JSON (AJAX)."""
         response = self.client.get(reverse("main:show_education"))
 
-        self.assertContains(response, self.education.nama_sekolah)
-        self.assertContains(response, self.education.jurusan)
-        self.assertContains(response, self.education.deskripsi)
-        self.assertContains(response, "Sedang berlangsung")
-        self.assertNotContains(response, "Belum ada riwayat pendidikan yang ditambahkan.")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "education.html")
+        self.assertContains(response, 'id="loading"')
+        self.assertContains(response, 'id="error"')
+        self.assertContains(response, 'id="empty"')
+        self.assertContains(response, 'id="grid"')
+        # Bukti halaman benar-benar AJAX: data tidak ikut dirender server.
+        self.assertNotContains(response, self.education.nama_sekolah)
+        self.assertNotContains(response, self.education.deskripsi)
+
+    def test_education_data_is_served_by_json_endpoint(self):
+        response = self.client.get(reverse("main:get_education_json"))
+        data = json.loads(response.content)
+
+        self.assertEqual(response["Content-Type"], "application/json")
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["pk"], str(self.education.pk))
+        self.assertEqual(
+            data[0]["fields"]["nama_sekolah"], "Universitas Contoh Testing"
+        )
+        self.assertTrue(data[0]["fields"]["is_ongoing"])
+        self.assertEqual(data[0]["fields"]["period_display"], "2023 - Sekarang")
+        self.assertEqual(data[0]["fields"]["star_count"], 0)
+        self.assertFalse(data[0]["fields"]["is_starred"])
 
     def test_education_page_shows_empty_state_when_no_data(self):
         Education.objects.all().delete()
@@ -118,15 +140,16 @@ class EducationTest(TestCase):
 
         self.assertContains(response, "Belum ada riwayat pendidikan yang ditambahkan.")
 
-    def test_completed_education_status(self):
+    def test_completed_education_status_in_json(self):
         self.education.tahun_lulus = 2025
         self.education.save()
-        response = self.client.get(reverse("main:show_education"))
 
-        self.assertFalse(self.education.is_ongoing)
-        self.assertEqual(self.education.period_display, "2023 - 2025")
-        self.assertContains(response, "Selesai")
-        self.assertNotContains(response, "Sedang berlangsung")
+        data = json.loads(
+            self.client.get(reverse("main:get_education_json")).content
+        )
+
+        self.assertFalse(data[0]["fields"]["is_ongoing"])
+        self.assertEqual(data[0]["fields"]["period_display"], "2023 - 2025")
 
     def test_navbar_has_education_link_on_other_pages(self):
         education_url = reverse("main:show_education")
@@ -397,7 +420,9 @@ class EducationJsonTest(TestCase):
         self.ui = Education.objects.create(
             nama_sekolah="Universitas Indonesia", tingkat="S1", tahun_masuk=2025
         )
-        Education.objects.create(nama_sekolah="SMAK Contoh", tingkat="sma", tahun_masuk=2022)
+        self.smak = Education.objects.create(
+            nama_sekolah="SMAK Contoh", tingkat="sma", tahun_masuk=2022
+        )
 
     def test_education_json_lists_all_and_filters_by_school_name(self):
         all_data = json.loads(self.client.get(reverse("main:get_education_json")).content)
@@ -408,16 +433,41 @@ class EducationJsonTest(TestCase):
         self.assertEqual(len(all_data), 2)
         self.assertEqual([item["pk"] for item in filtered], [str(self.ui.pk)])
 
-    def test_education_page_has_live_search_hooks(self):
-        response = self.client.get(reverse("main:show_education"))
-        
-        self.assertContains(response, "data-live-search")
-        self.assertContains(response, 'data-live-search-target=".education-grid"')
-
     def test_education_json_is_read_only(self):
         response = self.client.post(reverse("main:get_education_json"))
                 
         self.assertEqual(response.status_code, 405)
+
+    def test_list_json_includes_star_state_of_logged_in_user(self):
+        user = User.objects.create_user(username="json-star", password="password")
+        self.ui.starred_by.add(user)
+        self.client.force_login(user)
+
+        data = json.loads(self.client.get(reverse("main:get_education_json")).content)
+        fields_by_pk = {item["pk"]: item["fields"] for item in data}
+
+        self.assertEqual(fields_by_pk[str(self.ui.pk)]["star_count"], 1)
+        self.assertTrue(fields_by_pk[str(self.ui.pk)]["is_starred"])
+        self.assertEqual(fields_by_pk[str(self.smak.pk)]["star_count"], 0)
+        self.assertFalse(fields_by_pk[str(self.smak.pk)]["is_starred"])
+
+    def test_list_json_marks_nothing_starred_for_visitor(self):
+        self.ui.starred_by.add(User.objects.create_user(username="someone", password="password"))
+
+        data = json.loads(self.client.get(reverse("main:get_education_json")).content)
+
+        self.assertTrue(all(item["fields"]["is_starred"] is False for item in data))
+        self.assertEqual(data[0]["fields"]["star_count"], 1)
+
+    def test_education_page_loads_data_via_ajax_script(self):
+        """Kerangka halaman memuat konfigurasi JSON + skrip education.js."""
+        response = self.client.get(reverse("main:show_education"))
+
+        self.assertContains(response, "js/education.js")
+        self.assertContains(response, 'id="education-config"')
+        self.assertContains(response, reverse("main:get_education_json"))
+        self.assertContains(response, 'id="csrf-token-holder"')
+        self.assertContains(response, "csrfmiddlewaretoken")
 
 
 SECRET = "rahasia-test"
@@ -964,26 +1014,15 @@ class EducationCrudViewTest(TestCase):
         )
 
     # --- Antarmuka halaman Education ---
-    def test_education_page_now_has_edit_and_delete_controls(self):
+    def test_education_page_exposes_ajax_endpoints_and_secret_modal_for_owner(self):
         """Regresi: modal hapus Education dulu dibuat tetapi tidak pernah di-include."""
         response = self.client.get(reverse("main:show_education"))
 
-        self.assertContains(
-            response,
-            reverse(
-                "main:update_education",
-                args=[self.education.pk],
-            ),
-        )
-        self.assertContains(
-            response,
-            reverse(
-                "main:delete_education",
-                args=[self.education.pk],
-            ),
-        )
+        self.assertContains(response, reverse("main:create_education_ajax"))
+        self.assertContains(response, reverse("main:get_education_json"))
         self.assertContains(response, 'popover="auto"')
         self.assertContains(response, 'name="secret"')
+        self.assertContains(response, "csrfmiddlewaretoken")
 
     def test_created_education_is_immediately_available_in_json(self):
         self.client.post(
@@ -1128,8 +1167,12 @@ class AuthorizationAndStarTest(TestCase):
         self.assertTrue(
             self.education.starred_by.filter(pk=self.regular.pk).exists()
         )
-        self.assertContains(response, "Unstar")
-        self.assertContains(response, "1")
+
+        data = json.loads(
+            self.client.get(reverse("main:get_education_json")).content
+        )
+        self.assertTrue(data[0]["fields"]["is_starred"])
+        self.assertEqual(data[0]["fields"]["star_count"], 1)
 
         response = self.client.post(
             reverse("main:toggle_star", args=[self.education.pk]),
@@ -1139,8 +1182,12 @@ class AuthorizationAndStarTest(TestCase):
         self.assertFalse(
             self.education.starred_by.filter(pk=self.regular.pk).exists()
         )
-        self.assertContains(response, "Star")
-        self.assertContains(response, "0")
+
+        data = json.loads(
+            self.client.get(reverse("main:get_education_json")).content
+        )
+        self.assertFalse(data[0]["fields"]["is_starred"])
+        self.assertEqual(data[0]["fields"]["star_count"], 0)
 
     def test_star_endpoint_accepts_post_only(self):
         self.client.force_login(self.regular)
@@ -1594,51 +1641,35 @@ class StarToggleAjaxTest(TestCase):
             404,
         )
 
-    def test_star_button_markup_supports_script_and_accessibility(self):
-        self.education.starred_by.add(self.user)
-        self.client.force_login(self.user)
+    def test_client_script_renders_star_markup_for_script_and_accessibility(self):
+        """Kontrak markup kartu buatan education.js: form star yang dipakai star-toggle.js."""
+        js_source = (
+            Path(settings.BASE_DIR) / "static" / "js" / "education.js"
+        ).read_text(encoding="utf-8")
 
-        response = self.client.get(
-            reverse("main:show_education")
-        )
+        self.assertIn("data-star-form", js_source)
+        self.assertIn('class="star-label"', js_source)
+        self.assertIn("csrfmiddlewaretoken", js_source)
+        self.assertIn("aria-pressed", js_source)
 
-        self.assertContains(response, "data-star-form")
-        self.assertContains(
-            response,
-            'data-school="Universitas Ajax"',
-        )
-        self.assertContains(
-            response,
-            'aria-pressed="true"',
-        )
-        self.assertContains(
-            response,
-            "csrfmiddlewaretoken",
-        )
-        self.assertContains(
-            response,
-            "js/star-toggle.js",
-        )
+        response = self.client.get(reverse("main:show_education"))
+        self.assertContains(response, "js/star-toggle.js")
+        self.assertContains(response, 'id="csrf-token-holder"')
+        self.assertContains(response, "csrfmiddlewaretoken")
 
-    def test_visitor_sees_login_link_with_count_but_no_form(self):
+    def test_visitor_gets_login_link_config_but_no_star_form(self):
         self.education.starred_by.add(self.other)
 
-        response = self.client.get(
-            reverse("main:show_education")
-        )
+        response = self.client.get(reverse("main:show_education"))
 
-        self.assertNotContains(
-            response,
-            "data-star-form",
+        self.assertNotContains(response, "data-star-form")
+        self.assertContains(response, "/login/?next=/education/")
+
+        data = json.loads(
+            self.client.get(reverse("main:get_education_json")).content
         )
-        self.assertContains(
-            response,
-            "Login untuk Star",
-        )
-        self.assertContains(
-            response,
-            "?next=/education/",
-        )
+        self.assertEqual(data[0]["fields"]["star_count"], 1)
+        self.assertFalse(data[0]["fields"]["is_starred"])
 
 class RoleBadgeTest(TestCase):
     """Navbar menampilkan peran akun yang sedang login."""
@@ -1709,3 +1740,114 @@ class RoleBadgeTest(TestCase):
             response,
             "role-badge",
         )
+
+@override_settings(PORTFOLIO_SECRET=SECRET)
+class CreateEducationAjaxTest(TestCase):
+    """Endpoint AJAX tambah education: 201 berhasil, 400 validasi, 403 tanpa hak."""
+
+    def setUp(self):
+        Education.objects.all().delete()
+
+        self.regular = User.objects.create_user(
+            username="ajax-regular", password="password"
+        )
+        self.editor = User.objects.create_user(
+            username="ajax-editor", password="password"
+        )
+        self.editor.groups.add(Group.objects.get(name="Editor"))
+        self.owner = User.objects.create_superuser(
+            username="ajax-owner", password="password"
+        )
+        self.url = reverse("main:create_education_ajax")
+
+    def payload(self, **overrides):
+        data = {
+            "nama_sekolah": "Universitas Ajax",
+            "tingkat": "S1",
+            "jurusan": "Sistem Informasi",
+            "tahun_masuk": 2025,
+            "tahun_lulus": "",
+            "deskripsi": "Kuliah.",
+            "secret": SECRET,
+        }
+        data.update(overrides)
+        return data
+
+    def test_owner_can_add_education_via_ajax(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(self.url, self.payload())
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response["Content-Type"], "application/json")
+        result = response.json()
+        self.assertIn("berhasil", result["message"])
+        self.assertTrue(
+            Education.objects.filter(pk=result["pk"]).exists()
+        )
+
+    def test_invalid_payload_returns_400_with_field_errors(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(self.url, self.payload(nama_sekolah=""))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("nama_sekolah", response.json()["errors"])
+        self.assertEqual(Education.objects.count(), 0)
+
+    def test_wrong_secret_returns_400_and_saves_nothing(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(self.url, self.payload(secret="salah"))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("secret", response.json()["errors"])
+        self.assertEqual(Education.objects.count(), 0)
+
+    def test_editor_is_forbidden(self):
+        self.client.force_login(self.editor)
+
+        response = self.client.post(self.url, self.payload())
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(Education.objects.count(), 0)
+
+    def test_regular_user_is_forbidden(self):
+        self.client.force_login(self.regular)
+
+        response = self.client.post(self.url, self.payload())
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(Education.objects.count(), 0)
+
+    def test_visitor_is_forbidden(self):
+        response = self.client.post(self.url, self.payload())
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(Education.objects.count(), 0)
+
+    def test_get_method_is_rejected(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 405)
+
+    def test_xss_payload_is_sanitized_server_side(self):
+        """strip_tags pada clean_<field> harus membuang tag HTML sebelum simpan."""
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            self.url,
+            self.payload(
+                nama_sekolah='<img src="x" onerror="alert(\'XSS!\')">Sekolah Aman',
+                deskripsi="<script>alert(1)</script>Deskripsi aman",
+            ),
+        )
+
+        self.assertEqual(response.status_code, 201)
+        education = Education.objects.get()
+        self.assertEqual(education.nama_sekolah, "Sekolah Aman")
+        self.assertNotIn("<", education.nama_sekolah)
+        self.assertNotIn("<", education.deskripsi)
+        self.assertNotIn("onerror", education.nama_sekolah)
