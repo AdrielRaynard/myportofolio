@@ -1841,3 +1841,179 @@ python manage.py test
 
 serta pengujian manual per peran sebelum commit.
 
+## Tugas 5 — AJAX: fetch, Debouncing, Modal, Toast, dan Perlindungan XSS
+
+### Tujuan
+
+Menerapkan seluruh pola AJAX dari Tutorial 05 secara end-to-end pada bagian **Education**
+(bukan Projects), dengan hak akses dari Tugas 4 tetap berlaku: pengunjung dapat membaca
+data, sedangkan penambahan data hanya dapat dilakukan oleh pemilik (superuser).
+
+### Pemetaan ke Checklist Tugas
+
+| Checklist | Implementasi | Lokasi |
+|---|---|---|
+| Daftar hanya merender kerangka | `show_education` tidak mengirim queryset; template hanya berisi state container + konfigurasi JSON | `show_education`, `education.html` |
+| Data diambil lewat `fetch()` | Klien memanggil `GET /api/education/` lalu merender kartu | `static/js/education.js` |
+| Respons JSON disusun manual | `JsonResponse` berisi field model + `star_count` dan `is_starred` pengguna login | `get_education_json` |
+| Loading / empty / error | `#loading`, `#empty` (pesan spesifik saat sedang mencari), `#error` + tombol "Coba Lagi" | `education.html`, `education.js` |
+| Pencarian AJAX + debouncing | Event `input` → debounce 300 ms → request dengan filter `nama_sekolah__icontains`; request lama dibatalkan `AbortController` | `education.js`, `get_education_json` |
+| Form tambah di dalam modal | Modal Popover API; submit dicegat lalu dikirim `fetch POST` | `education_form_modal.html`, `education.js` |
+| View POST dengan `ModelForm` + status HTTP | `create_education_ajax`: **201** berhasil, **400** validasi gagal (`errors` per field), **403** tanpa hak | `main/views.py` |
+| Hak akses diperiksa di view | `is_owner(request.user)` dari `main.permissions` — bukan hanya menyembunyikan tombol | `create_education_ajax` |
+| Token CSRF pada POST | Header `X-CSRFToken` (dari cookie) untuk request modal; `csrfmiddlewaretoken` pada form star/hapus yang dirender klien | `education.js`, `base.html` |
+| Daftar ter-update tanpa reload | Setelah 201, `fetchEducations()` dipanggil ulang dengan kata kunci aktif | `addEducation` |
+| Toast sukses / gagal | `showToast` untuk sukses, pesan validasi berlabel field, dan kegagalan jaringan | `addEducation`, `static/js/toast.js` |
+| Escaping sisi klien | `escapeHtml()` dipakai pada **setiap** nilai teks sebelum masuk `innerHTML`; toast menulis via `textContent` | `static/js/utils.js`, `education.js` |
+| Pembersihan sisi server | `strip_tags` pada `clean_<field>` `EducationForm`; input yang hanya berisi tag ditolak | `main/forms.py` |
+| Berjalan untuk semua peran | `python manage.py runserver` + 136 test hijau; diuji manual untuk pengunjung, pengguna, editor, pemilik | `main/tests.py` |
+
+### Alur Kerja AJAX
+
+```text
+Menampilkan daftar:
+  Browser (kerangka education.html)
+    → fetch() GET /api/education/ (JSON manual + info star)
+    → education.js: buildEducationCard() (setiap teks di-escape)
+    → grid terisi tanpa reload
+
+Menambah data:
+  Modal (popover) → submit dicegat
+    → fetch POST /education/add-ajax/ (X-CSRFToken + FormData)
+    → server: cek is_owner → EducationForm (strip_tags + validasi)
+    → 201: reset form, tutup modal, toast sukses, muat ulang daftar
+    → 400: toast berisi pesan validasi per field
+    → 403: toast "hanya pemilik portofolio"
+```
+
+### Fitur Tambahan — Shortcut Keyboard
+
+- **`/`** memfokuskan kolom pencarian dari mana pun (diabaikan saat mengetik di field lain, saat modal terbuka, atau saat tombol modifier ditekan).
+- **`Esc`** membersihkan filter bila fokus berada di kolom pencarian.
+- Modal tambah/hapus tidak ditangani manual karena Popover API (`popover="auto"`) sudah menutup diri lewat *light dismiss* bawaan browser.
+
+### Perubahan File Utama
+
+| File | Perubahan |
+|---|---|
+| `static/js/utils.js` (baru) | `escapeHtml()` dan `getCookie()` bersama untuk semua halaman |
+| `static/js/education.js` (baru) | Seluruh logika klien halaman Education (fetch, debounce, render, modal, toast, shortcut) |
+| `templates/education.html` | Kerangka halaman + elemen state + konfigurasi JSON (`education-config`) |
+| `templates/base.html` | Memuat `utils.js`, block `scripts`, menghapus footer duplikat |
+| `main/views.py` | `show_education` jadi kerangka; `get_education_json` menyusun `JsonResponse` manual (agregasi `Count`, tanpa identitas pemberi star); `create_education_ajax` memeriksa `is_owner` |
+| `main/forms.py` | Perbaikan `clean_jurusan`: jurusan kosong disimpan `NULL`, bukan teks `"None"` |
+| `main/migrations/0008_fix_none_jurusan.py` (baru) | Data migration: membetulkan baris lama yang jurusannya `"None"` |
+| `main/tests.py` | Test AJAX skeleton, status 201/400/403, sanitasi XSS, kebocoran username, kontrak skrip, shortcut |
+
+### Setup Tambahan
+
+Cuma perlu:
+
+```bash
+python manage.py migrate   # menerapkan 0008_fix_none_jurusan (perbaikan data lama)
+```
+
+### Verifikasi Fitur Tugas 5
+
+**Semua peran**
+
+* [ ] `/education/` memuat data tanpa reload; loading → grid
+* [ ] Pencarian terkirim hanya setelah berhenti mengetik (~300 ms)
+* [ ] Kata kunci tanpa hasil menampilkan pesan pencarian spesifik
+
+**Pengunjung** — tidak ada tombol tambah; star berupa tautan "Login untuk Star"
+
+**Pengguna/Editor** — bisa star tanpa reload; POST ke `/education/add-ajax/` → **403**
+
+**Pemilik** — modal tambah muncul; 201 → toast sukses + daftar ter-update; input tidak valid → 400 → toast berlabel field; kode rahasia salah → toast error
+
+**XSS** — menambah data `<img src="x" onerror="alert('XSS!')">` ditolak server; versi campuran teks disimpan bersih dan tampil sebagai teks biasa, tanpa alert
+
+**Keamanan** — `/api/education/` tidak memuat username maupun field `starred_by_names`
+
+### Pertanyaan Reflektif
+
+#### 1. Apa itu debouncing dan mengapa penting pada pencarian AJAX?
+
+**Debouncing** adalah teknik menunda eksekusi sebuah fungsi sampai pengguna *berhenti* melakukan aksi tertentu (misalnya berhenti mengetik) selama jeda waktu yang ditentukan. Setiap event baru yang masuk mereset timer; fungsi hanya dijalankan bila tidak ada event lagi selama jeda tersebut.
+
+Di `static/js/education.js`, setiap event `input` pada kolom pencarian memanggil `clearTimeout(searchDebounceTimer)` lalu menjadwalkan ulang `setTimeout(..., SEARCH_DEBOUNCE_DELAY)` dengan delay **300 ms**. Request pencarian hanya terkirim ketika pengguna berhenti mengetik selama 300 ms.
+
+Teknik ini penting pada pencarian AJAX karena:
+
+- **Menghemat request.** Tanpa debouncing, mengetik "universitas" (11 karakter) mengirim 11 request, dan 10 di antaranya sia-sia karena kata kuncinya sudah usang sebelum responsnya dipakai.
+- **Mengurangi beban server dan jaringan** tanpa mengorbankan kesan real-time — jeda 300 ms tidak dirasakan manusia, tetapi sudah menggabungkan seluruh ketikan menjadi satu request.
+- **Mengurangi race condition.** Respons untuk kata kunci lama bisa tiba belakangan dan menimpa hasil yang lebih baru. Karena itu debouncing dikombinasikan dengan `AbortController`: request sebelumnya *dibatalkan* ketika kata kunci berubah, sehingga hasil yang tampil dijamin milik kata kunci terakhir.
+
+#### 2. Apa fungsi `await` pada `fetch()` dan apa yang terjadi tanpa `await`?
+
+`fetch()` adalah operasi **asynchronous**: ia langsung mengembalikan sebuah `Promise` yang akan selesai (resolve) ketika respons HTTP tiba, sementara baris kode berikutnya secara default sudah dieksekusi lebih dulu. `await` menunda eksekusi fungsi `async` yang memuatnya sampai Promise tersebut selesai, lalu "membuka" nilainya sehingga bisa dipakai seperti operasi biasa:
+
+```javascript
+const response = await fetch(url);        // menunggu respons HTTP tiba
+if (!response.ok) throw new Error(...);   // aman: response sudah objek Response
+const data = await response.json();       // menunggu body selesai di-parse
+```
+
+Jika `await` dihilangkan (dan tidak ada penanganan lain), variabel `response` **bukan** objek `Response`, melainkan `Promise` yang belum selesai. Akibatnya:
+
+- `response.ok` bernilai `undefined`, sehingga guard `if (!response.ok) throw ...` selalu terpicu — halaman selalu berpindah ke *error state* meskipun server sukses membalas.
+- `response.json()` melempar `TypeError: response.json is not a function`, karena objek `Promise` tidak punya method `json()`.
+- Alur program menjadi tidak deterministik: kode yang seharusnya menunggu data justru berjalan lebih dulu dengan data yang belum tersedia, sehingga daftar bisa dirender kosong atau *loading state* tidak pernah selesai.
+
+"Tanpa `await`" tidak otomatis berarti salah: alternatif yang valid adalah merantai `fetch(url).then(...)` — secara semantik sama-sama menangani Promise, hanya gaya penulisannya berbeda. Yang berbahaya adalah **membaca hasil fetch sebelum Promise-nya selesai**. Kelebihan `await` adalah kodenya terbaca seperti sinkron dan langsung bisa dibungkus `try/catch`, yang dipakai untuk menampilkan *error state* ketika jaringan gagal.
+
+#### 3. Apa itu serangan XSS dan mengapa data lewat AJAX/JavaScript lebih rentan?
+
+**Cross-Site Scripting (XSS)** adalah serangan ketika penyerang menyisipkan kode HTML/JavaScript berbahaya ke dalam halaman yang dilihat orang lain, umumnya lewat data yang dikirim pengguna. Contoh pada aplikasi ini: nama sekolah berisi payload `<img src="x" onerror="alert('XSS!')">`. Bila payload dirender kembali tanpa dibersihkan, browser mengeksekusinya sebagai bagian halaman — bisa mencuri cookie (termasuk `sessionid`), melakukan aksi atas nama korban, atau mengubah tampilan halaman. Berdasarkan jalurnya, XSS dibagi menjadi *stored* (payload tersimpan di database), *reflected* (ikut dalam request), dan *DOM-based* (terjadi saat JavaScript memanipulasi DOM).
+
+Data yang ditampilkan lewat AJAX/JavaScript lebih rentan karena:
+
+- **Template Django punya proteksi bawaan, JavaScript tidak.** Django Template Language otomatis meng-escape setiap variabel — `{{ education.nama_sekolah }}` mengubah `<` menjadi `&lt;` dst., sehingga payload hanya tampil sebagai teks. Saat merender lewat JavaScript, tidak ada mekanisme otomatis seperti itu.
+- **Jalur klasik DOM-based XSS: `innerHTML` + template literal.** Kesalahan umum adalah menulis `card.innerHTML = \`<h2>${education.nama_sekolah}</h2>\``. Browser mem-parsing string tersebut *sebagai HTML*, sehingga tag berbahaya ikut dibuat dan dieksekusi. Di halaman AJAX, hampir semua data melewati jalur ini.
+- **Data JSON sering dianggap "terpercaya".** Padahal isi JSON tetap merupakan input pengguna yang tersimpan di database (stored XSS) — berasal dari server bukan berarti aman disisipkan mentah-mentah ke DOM.
+
+Karena itu proteksi diterapkan berlapis (*defence in depth*):
+
+1. **Sisi server** — `strip_tags` pada `clean_<field>` di `EducationForm`: tag HTML dibuang sebelum data masuk database, dan input yang hanya berisi tag ditolak. Diuji oleh `test_xss_payload_is_sanitized_server_side`.
+2. **Sisi klien** — fungsi `escapeHtml()` di `static/js/utils.js` meng-escape `& < > " '` dan dipakai pada **setiap** nilai teks sebelum digabungkan ke template literal di `buildEducationCard`; payload tampil sebagai teks biasa dan `alert` tidak pernah muncul. Toast juga aman karena `showToast` menulis pesan lewat `textContent`, bukan `innerHTML`.
+
+## AI Disclosure Tugas 5
+
+### Tools yang Digunakan
+
+- **ZCode (GLM)** — debugging error dan anomali perilaku, penulisan draf test regresi, dan penyusunan dokumentasi README bagian ini.
+
+### Strategi Prompting
+
+1. **Context-first** — prompt selalu menyertakan traceback/pesan test yang gagal, potongan kode terkait, dan konteks implementasi, bukan cuma deskripsi gejala.
+2. **Constraint-aware** — AI diminta menahan diri pada materi Tutorial 05 dan struktur proyek yang sudah ada (namespace `main:`, komponen template, CSS) tanpa menambah teknologi baru.
+3. **Verification-driven** — setiap diagnosis diikuti permintaan test regresi dan skenario uji manual per peran agar klaim bisa saya periksa sendiri sebelum dipakai.
+4. **Iterasi** — saran pertama tidak selalu dipakai mentah; hasilnya dibandingkan dengan perilaku aktual di browser dan hasil `python manage.py test`, lalu dikoreksi.
+
+### Bagian yang Dibantu AI
+
+| Bagian | Bantuan AI | Yang saya lakukan |
+|---|---|---|
+| Debugging jurusan kosong tersimpan `"None"` | Menjelaskan akar masalah `strip_tags(None)` pada field `null=True` dan pola perbaikannya | Membuat test regresi merah→hijau, menjalankan migration, memverifikasi di Admin |
+| Debugging queryset `annotate()` mengabaikan `Meta.ordering` | Mendiagnosis kenapa urutan JSON berubah setelah refactoring agregasi (query GROUP BY membuang default ordering) | Membaca ulang SQL hasil query, menambah `order_by` eksplisit, memastikan 136 test hijau |
+| Review keamanan respons star | Menjelaskan vektor kebocoran username pemberi star pada respons JSON publik dan alternatif agregasi `Count` | Menulis skenario uji anonim dengan star yang sudah ada, menghapus field dari konsumsi UI |
+| Penulisan test regresi | Draf test AJAX skeleton, status 201/400/403, sanitasi XSS, kebocoran username, dan kontrak skrip klien | Menyesuaikan nama/pola test dengan konvensi `tests.py`, membuang false positive, menjalankan seluruh suite |
+| Debugging shortcut `/` mati saat toast tampil | Menjelaskan selector `:popover-open` ikut mencocokkan toast `popover="manual"` | Mempersempit selector, menguji interaksi modal/toast di browser |
+| Dokumentasi README Tugas 5 | Kerangka dokumentasi, jawaban pertanyaan reflektif, dan log prompting | Meninjau, menyesuaikan dengan implementasi aktual, dan memastikan setiap klaim sesuai kode |
+
+### Contoh Log Prompting
+
+| Tahap | Kebutuhan | Ringkasan Prompt | Hasil yang Dipakai |
+|---|---|---|---|
+| Debugging | Jurusan `"None"` | Menyertakan `clean_jurusan` + definisi model, meminta penjelasan kenapa kosong jadi teks `"None"` | Diagnosa `strip_tags(None)` + pola guard + data migration |
+| Debugging | Urutan JSON kacau | Menyertakan test yang gagal (`data[0]` salah) dan SQL queryset, meminta diagnosis | Temuan `Meta.ordering` diabaikan pada query agregasi |
+| Keamanan | Kebocoran username | Menyertakan `get_education_json`, meminta analisis data apa saja yang ter ekspos ke anonim | Daftar field berisiko + alternatif perhitungan star tanpa memuat `User` |
+| Pengujian | Cakupan regresi | Menyertakan checklist tugas, meminta draf test per checklist dan edge case | Draf test yang kemudian saya sesuaikan dan jalankan |
+| Dokumentasi | README mingguan | Meminta struktur bagian Tugas 5 + jawaban reflektif sesuai format README yang sudah ada | Dokumentasi bagian ini |
+
+### Keterbatasan AI dan Perbaikan Manual
+
+- **Diagnosis AI tidak selalu tepat sasaran.** Beberapa saran perbaikan awal tidak memperhitungkan perilaku Django yang halus (mis. query agregasi yang mengabaikan `Meta.ordering`), sehingga tetap harus diverifikasi dengan SQL dan test sebelum diterima.
+- **Test hasil draf AI bisa memberi hasil positif palsu.** Test kebocoran username versi awal lolos hanya karena database uji kosong; saya perbaiki dengan menambahkan star *sebelum* memeriksa respons anonim.
+- **Semua klaim diverifikasi sendiri** — `python manage.py test` (136 test), `node --check` untuk berkas JS, dan pengujian manual per peran di `runserver` sebelum perubahan dianggap selesai. Keputusan akhir, penyesuaian ke struktur proyek, dan penjalanan kode dilakukan oleh saya.
