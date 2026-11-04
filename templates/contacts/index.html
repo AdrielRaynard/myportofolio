@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <title>Daftar Kontak</title>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.11/dist/htmx.min.js"></script>
+    <style>#contact-rows tr.empty:not(:only-child) { display: none; }</style>
+</head>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    <h1>Tambah Kontak</h1>
+    <form hx-post="{% url 'contacts:contact_add' %}" hx-target="#contact-rows" hx-swap="beforeend"
+          hx-on::after-request="if (event.detail.successful) this.reset()">
+        {% csrf_token %}
+        <input name="name" placeholder="Nama" maxlength="100" required>
+        <input type="email" name="email" placeholder="Email" required>
+        <input type="tel" name="phone" placeholder="Telepon" maxlength="32">
+        <button type="submit">Tambah</button>
+    </form>
+    <div id="feedback" role="status"></div>
+    <h1>Daftar Kontak</h1>
+    <input type="search" name="q" placeholder="Cari kontak..." hx-get="{% url 'contacts:contact_search' %}"
+           hx-trigger="keyup changed delay:300ms, search" hx-target="#contact-rows" hx-indicator="#search-indicator">
+    <span id="search-indicator" class="htmx-indicator">Mencari...</span>
+    <table>
+        <thead><tr><th>Nama</th><th>Email</th><th>Telepon</th><th>Aksi</th></tr></thead>
+        <tbody id="contact-rows">{% include "contacts/_contact_rows.html" %}</tbody>
+    </table>
+</body>
+</html>

@@ -1,6 +1,8 @@
 from django.contrib import admin
 
-from main.models import Education
+from main.models import Contact, Education
+
+admin.site.register(Contact)
 
 @admin.register(Education)
 class EducationAdmin(admin.ModelAdmin):

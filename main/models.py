@@ -68,3 +68,12 @@ class Education(models.Model):
         if self.is_ongoing:
             return f"{self.tahun_masuk} - Sekarang"
         return f"{self.tahun_masuk} - {self.tahun_lulus}"
+
+
+class Contact(models.Model):
+    name = models.CharField(max_length=100)
+    email = models.EmailField()
+    phone = models.CharField(max_length=32, blank=True)
+
+    def __str__(self):
+        return self.name
