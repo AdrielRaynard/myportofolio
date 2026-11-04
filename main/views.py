@@ -320,7 +320,7 @@ def show_education(request):
     return render(
         request,
         "education.html",
-        _page_context(form=EducationForm()),
+        _page_context(form=EducationForm(require_secret=False)),
     )
 
 

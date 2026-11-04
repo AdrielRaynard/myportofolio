@@ -467,19 +467,19 @@ class EducationJsonTest(TestCase):
         self.assertNotIn("starred_by_names", content)
 
     def test_education_page_loads_data_via_ajax_script(self):
-        """Kerangka halaman memuat konfigurasi JSON + skrip education.js."""
+        """Halaman memuat endpoint DRF dan menyiapkan cookie CSRF."""
         response = self.client.get(reverse("main:show_education"))
 
-        self.assertContains(response, "js/education.js")
-        self.assertContains(response, 'id="education-config"')
-        self.assertContains(response, reverse("main:get_education_json"))
-        self.assertContains(response, 'id="csrf-token-holder"')
+        self.assertNotContains(response, "js/education.js")
+        self.assertContains(response, reverse("api:education-star", args=["00000000-0000-0000-0000-000000000000"]))
+        self.assertContains(response, reverse("api:education-list"))
+        self.assertIn("csrftoken", response.cookies)
         self.assertContains(response, "csrfmiddlewaretoken")
 
     def test_education_script_registers_keyboard_shortcuts(self):
         """Shortcut "/" fokus pencarian dan Esc membersihkan filter harus terpasang."""
         js_source = (
-            Path(settings.BASE_DIR) / "static" / "js" / "education.js"
+            Path(settings.BASE_DIR) / "templates" / "education.html"
         ).read_text(encoding="utf-8")
 
         self.assertIn('"keydown"', js_source)
@@ -1047,14 +1047,14 @@ class EducationCrudViewTest(TestCase):
         )
 
     # --- Antarmuka halaman Education ---
-    def test_education_page_exposes_ajax_endpoints_and_secret_modal_for_owner(self):
+    def test_education_page_exposes_api_and_education_modal_for_owner(self):
         """Regresi: modal hapus Education dulu dibuat tetapi tidak pernah di-include."""
         response = self.client.get(reverse("main:show_education"))
 
-        self.assertContains(response, reverse("main:create_education_ajax"))
-        self.assertContains(response, reverse("main:get_education_json"))
+        self.assertContains(response, 'id="education-form"')
+        self.assertContains(response, reverse("api:education-list"))
         self.assertContains(response, 'popover="auto"')
-        self.assertContains(response, 'name="secret"')
+        self.assertNotContains(response, 'name="secret"')
         self.assertContains(response, "csrfmiddlewaretoken")
 
     def test_created_education_is_immediately_available_in_json(self):
@@ -1675,19 +1675,19 @@ class StarToggleAjaxTest(TestCase):
         )
 
     def test_client_script_renders_star_markup_for_script_and_accessibility(self):
-        """Kontrak markup kartu buatan education.js: form star yang dipakai star-toggle.js."""
+        """Tombol star memakai event delegation dan mendukung aksesibilitas."""
         js_source = (
-            Path(settings.BASE_DIR) / "static" / "js" / "education.js"
+            Path(settings.BASE_DIR) / "templates" / "education.html"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("data-star-form", js_source)
+        self.assertIn('data-action="star"', js_source)
         self.assertIn('class="star-label"', js_source)
-        self.assertIn("csrfmiddlewaretoken", js_source)
+        self.assertIn("X-CSRFToken", js_source)
         self.assertIn("aria-pressed", js_source)
 
         response = self.client.get(reverse("main:show_education"))
         self.assertContains(response, "js/star-toggle.js")
-        self.assertContains(response, 'id="csrf-token-holder"')
+        self.assertIn("csrftoken", response.cookies)
         self.assertContains(response, "csrfmiddlewaretoken")
 
     def test_visitor_gets_login_link_config_but_no_star_form(self):
