@@ -4,6 +4,7 @@
     const status = page.querySelector("#experience-status");
     const search = page.querySelector("#experience-search");
     const input = search.elements.title;
+    const starredOnly = search.elements.starred;
     const template = page.querySelector("#experience-card");
     const categories = JSON.parse(page.querySelector("#experience-categories").textContent);
     const editor = page.querySelector("#experience-editor");
@@ -81,18 +82,26 @@
         activeRead = read;
         const url = new URL(page.dataset.listUrl, location.origin);
         const title = input.value.trim();
+        const starred = Boolean(starredOnly?.checked);
         if (title) url.searchParams.set("title", title);
+        if (starred) url.searchParams.set("starred", "true");
         grid.setAttribute("aria-busy", "true");
         try {
             const rows = await api(url, "GET", undefined, read.signal);
             if (read.signal.aborted) return;
             grid.replaceChildren(...rows.map(makeCard));
-            status.textContent = rows.length ? "" : (title
-                ? "Tidak ada pengalaman dengan judul tersebut."
-                : "Belum ada pengalaman yang ditambahkan.");
+            status.textContent = rows.length ? "" : (starred
+                ? (title
+                    ? "Tidak ada pengalaman berbintang dengan judul tersebut."
+                    : "Belum ada pengalaman yang kamu beri star.")
+                : (title
+                    ? "Tidak ada pengalaman dengan judul tersebut."
+                    : "Belum ada pengalaman yang ditambahkan."));
             const pageUrl = new URL(location.href);
             if (title) pageUrl.searchParams.set("title", title);
             else pageUrl.searchParams.delete("title");
+            if (starred) pageUrl.searchParams.set("starred", "true");
+            else pageUrl.searchParams.delete("starred");
             history.replaceState(null, "", pageUrl);
         } catch (error) {
             if (read.signal.aborted) return;
@@ -199,6 +208,7 @@
         event.preventDefault();
         loadList();
     });
+    starredOnly?.addEventListener("change", loadList);
     addButton?.addEventListener("click", () => openForm(null, addButton));
     page.querySelector("#cancel-experience")?.addEventListener("click", closeForm);
     form?.addEventListener("submit", save);

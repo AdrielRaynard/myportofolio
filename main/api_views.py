@@ -101,6 +101,11 @@ def experience_list(request):
         title = request.query_params.get("title", "").strip()
         if title:
             experiences = experiences.filter(title__icontains=title)
+        if request.query_params.get("starred") == "true":
+            if request.user.is_authenticated:
+                experiences = experiences.filter(starred_by=request.user)
+            else:
+                experiences = experiences.none()
         return Response(ExperienceSerializer(experiences, many=True).data)
 
     serializer = ExperienceSerializer(data=request.data)

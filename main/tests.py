@@ -1147,6 +1147,7 @@ class AuthorizationAndStarTest(TestCase):
                 response = self.client.get(reverse("main:show_experience"))
                 html = response.content.decode()
                 self.assertEqual('data-action="star"' in html, user is not None)
+                self.assertEqual('name="starred"' in html, user is not None)
                 self.assertEqual('id="experience-form"' in html, can_edit)
                 self.assertEqual('data-action="edit"' in html, can_edit)
                 self.assertEqual('id="add-experience"' in html, can_create)

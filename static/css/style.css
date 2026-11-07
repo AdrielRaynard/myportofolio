@@ -754,6 +754,21 @@ body {
     border-color: var(--accent);
 }
 
+.search-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.search-filter input {
+    width: auto;
+    accent-color: var(--accent);
+}
+
 .card-actions {
     display: flex;
     flex-wrap: wrap;

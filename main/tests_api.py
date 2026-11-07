@@ -415,3 +415,28 @@ class ExperienceAPITest(APITestCase):
         self.client.force_authenticate(user=self.owner)
         response = self.client.delete(self.list_url)
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_starred_filter_is_scoped_to_the_request_user(self):
+        other = Experience.objects.create(
+            title="Pengalaman Lain",
+            description="Data untuk memeriksa isolasi filter.",
+            category="volunteer",
+        )
+        self.experience.starred_by.add(self.member)
+        other.starred_by.add(self.owner)
+
+        self.client.force_authenticate(user=self.member)
+        response = self.client.get(self.list_url, {"starred": "true"})
+        self.assertEqual([item["id"] for item in response.data], [str(self.experience.id)])
+        self.assertTrue(response.data[0]["is_starred"])
+        self.assertEqual(response.data[0]["star_count"], 1)
+
+        combined = self.client.get(
+            self.list_url,
+            {"starred": "true", "title": "tidak-ada"},
+        )
+        self.assertEqual(combined.data, [])
+
+        self.client.force_authenticate(user=None)
+        anonymous = self.client.get(self.list_url, {"starred": "true"})
+        self.assertEqual(anonymous.data, [])
