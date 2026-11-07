@@ -19,6 +19,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST, require_safe
 from xhtml2pdf import pisa
 
@@ -84,12 +85,6 @@ def _json_detail_response(model, pk, fields):
             status=404,
         )
     return _json_response([instance], fields)
-
-
-def _objects_from_json(json_response):
-    """Deserialisasi respons JSON kembali menjadi list model instance."""
-    payload = json_response.content.decode("utf-8")
-    return [item.object for item in serializers.deserialize("json", payload)]
 
 
 def _form_view(
@@ -188,15 +183,14 @@ def get_experience_detail_json(request, experience_id):
 
 
 @require_safe
+@ensure_csrf_cookie
 def show_experience(request):
-    """Halaman Experience: data diambil dari JSON lalu dideserialisasi."""
-    experiences = _objects_from_json(get_experience_json(request))
-
-    context = _page_context(
-        experience_list=experiences,
+    """Siapkan halaman dan cookie CSRF untuk aksi fetch, termasuk star pengguna."""
+    return render(request, "experience.html", _page_context(
+        form=ExperienceForm(require_secret=False),
+        category_labels=dict(Experience.EXPERIENCE_CHOICES),
         title_query=request.GET.get("title", "").strip(),
-    )
-    return render(request, "experience.html", context)
+    ))
 
 
 @owner_required

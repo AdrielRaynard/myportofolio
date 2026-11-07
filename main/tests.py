@@ -1,13 +1,10 @@
 import json
-from unittest import mock
 
 from django.urls import reverse
 from django.utils import timezone
 from django.contrib.auth.models import Group, User
 from django.contrib.messages import constants as message_levels
 from django.contrib.messages.storage.base import Message
-from django.core import serializers
-from django.http import HttpResponse, response
 from django.template.loader import render_to_string
 from django.test import TestCase, override_settings
 from django.core.exceptions import ValidationError
@@ -55,30 +52,23 @@ class MainTest(TestCase):
 
     def test_experience_page(self):
         response = self.client.get(reverse("main:show_experience"))
-
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "experience.html")
-        self.assertContains(response, self.experience.title)
-        self.assertContains(response, self.experience.description)
-        self.assertContains(response, "Kepanitiaan")
-        self.assertContains(response, "Sedang berlangsung")
+        self.assertContains(response, reverse("api:experience-list"))
+        self.assertContains(response, "js/experience.js")
+        self.assertNotContains(response, self.experience.title)
         self.assertContains(response, f'href="{reverse("main:show_main")}"')
 
-    def test_empty_experience_page(self):
+    def test_empty_list_endpoint(self):
         Experience.objects.all().delete()
-        response = self.client.get(reverse("main:show_experience"))
-
-        self.assertContains(response, "Belum ada pengalaman yang ditambahkan.")
+        response = self.client.get(reverse("api:experience-list"))
+        self.assertEqual(response.json(), [])
 
     def test_completed_experience(self):
         self.experience.ended_at = timezone.now()
         self.experience.save()
-        response = self.client.get(reverse("main:show_experience"))
-
-        self.assertFalse(self.experience.is_ongoing)
-        self.assertContains(response, "Selesai")
-        self.assertNotContains(response, "Sedang berlangsung")
-
+        response = self.client.get(reverse("api:experience-detail", args=[self.experience.pk]))
+        self.assertFalse(response.json()["is_ongoing"])
 
 class EducationTest(TestCase):
     def setUp(self):
@@ -359,48 +349,31 @@ class ExperienceJsonTest(TestCase):
 
         self.assertEqual(response.status_code, 405)
 
-    def test_page_context_holds_deserialized_model_instances(self):
+    def test_api_list_matches_card_order(self):
+        response = self.client.get(reverse("api:experience-list"))
+        self.assertEqual([item["id"] for item in response.json()],
+                         [str(self.newer.pk), str(self.older.pk)])
+
+    def test_page_provides_csrf_cookie_for_javascript(self):
         response = self.client.get(reverse("main:show_experience"))
+        self.assertIn("csrftoken", response.cookies)
+        self.assertContains(response, 'id="experience-list"')
 
-        experiences = response.context["experience_list"]
-        self.assertEqual(len(experiences), 2)
-        self.assertTrue(all(isinstance(item, Experience) for item in experiences))
-        self.assertEqual(experiences[0].pk, self.newer.pk)
-
-    def test_page_renders_data_delivered_by_the_json_endpoint(self):
-        """Bukti halaman memakai JSON: data yang hanya ada di JSON tetap tampil."""
-        only_in_json = Experience(
-            title="Hanya Ada Di Respons JSON", description="Tidak disimpan ke DB.", category="research"
-        )
-        fake_response = HttpResponse(
-            serializers.serialize("json", [only_in_json]), content_type="application/json"
-        )
-
-        with mock.patch("main.views.get_experience_json", return_value=fake_response):
-            response = self.client.get(reverse("main:show_experience"))
-
-        self.assertContains(response, "Hanya Ada Di Respons JSON")
-        self.assertNotContains(response, self.newer.title)
-
-    def test_page_search_filters_and_shows_query(self):
-        response = self.client.get(reverse("main:show_experience"), {"title": "Asisten"})
-
-        self.assertContains(response, self.older.title)
-        self.assertNotContains(response, self.newer.title)
+    def test_page_and_api_share_title_query(self):
+        query = {"title": "Asisten"}
+        response = self.client.get(reverse("main:show_experience"), query)
         self.assertContains(response, 'value="Asisten"')
-        self.assertContains(response, "data-live-search")
-        self.assertContains(response, 'data-live-search-target=".experience-grid"')
+        rows = self.client.get(reverse("api:experience-list"), query).json()
+        self.assertEqual([row["id"] for row in rows], [str(self.older.pk)])
 
-    def test_page_search_without_match_shows_specific_empty_state(self):
-        response = self.client.get(reverse("main:show_experience"), {"title": "xyz"})
+    def test_api_returns_empty_search_results(self):
+        response = self.client.get(reverse("api:experience-list"), {"title": "xyz"})
+        self.assertEqual(response.json(), [])
 
-        self.assertContains(response, "Tidak ada pengalaman dengan judul tersebut.")
-
-    def test_page_shows_thumbnail_only_when_available(self):
-        response = self.client.get(reverse("main:show_experience"))
-
-        self.assertContains(response, 'src="https://example.com/magang.png"')
-        self.assertEqual(response.content.decode().count("experience-thumbnail"), 1)
+    def test_api_returns_optional_thumbnail_for_cards(self):
+        rows = self.client.get(reverse("api:experience-list")).json()
+        self.assertEqual([row["thumbnail"] for row in rows],
+                         ["https://example.com/magang.png", None])
 
     def test_page_only_accepts_safe_methods(self):
         response = self.client.post(reverse("main:show_experience"))
@@ -785,19 +758,17 @@ class ExperienceCrudViewTest(TestCase):
         self.assertEqual(response.status_code, 404)
 
     # --- Antarmuka halaman Experience ---
-    def test_experience_page_links_to_add_edit_and_delete(self):
+    def test_owner_page_exposes_api_controls(self):
         response = self.client.get(reverse("main:show_experience"))
+        self.assertContains(response, 'id="add-experience"')
+        self.assertContains(response, 'data-action="edit"')
+        self.assertContains(response, 'data-action="delete"')
 
-        self.assertContains(response, reverse("main:create_experience"))
-        self.assertContains(response, reverse("main:update_experience", args=[self.experience.pk]))
-        self.assertContains(response, reverse("main:delete_experience", args=[self.experience.pk]))
-
-    def test_delete_modal_asks_for_secret_and_carries_csrf(self):
+    def test_owner_api_form_uses_session_and_csrf(self):
         response = self.client.get(reverse("main:show_experience"))
-
-        self.assertContains(response, 'popover="auto"')
-        self.assertContains(response, 'name="secret"')
-        self.assertContains(response, "csrfmiddlewaretoken")
+        self.assertContains(response, 'id="experience-form"')
+        self.assertNotContains(response, 'name="secret"')
+        self.assertIn("csrftoken", response.cookies)
 
     def test_no_stray_diff_markers_are_rendered(self):
         """Regresi: karakter '+' sisa salinan patch pernah ikut tampil di halaman."""
@@ -1166,28 +1137,20 @@ class AuthorizationAndStarTest(TestCase):
             self.assertEqual(response.status_code, 403)
 
     def test_role_based_controls_are_hidden_or_shown(self):
-        experience_url = reverse("main:show_experience")
-        create_url = reverse("main:create_experience")
-        update_url = reverse("main:update_experience", args=[self.experience.pk])
-        delete_url = reverse("main:delete_experience", args=[self.experience.pk])
-
-        self.client.force_login(self.regular)
-        response = self.client.get(experience_url)
-        self.assertNotContains(response, create_url)
-        self.assertNotContains(response, update_url)
-        self.assertNotContains(response, delete_url)
-
-        self.client.force_login(self.editor)
-        response = self.client.get(experience_url)
-        self.assertContains(response, update_url)
-        self.assertNotContains(response, create_url)
-        self.assertNotContains(response, delete_url)
-
-        self.client.force_login(self.owner)
-        response = self.client.get(experience_url)
-        self.assertContains(response, create_url)
-        self.assertContains(response, update_url)
-        self.assertContains(response, delete_url)
+        for user, can_edit, can_create in [
+            (None, False, False), (self.regular, False, False),
+            (self.editor, True, False), (self.owner, True, True),
+        ]:
+            with self.subTest(user=user):
+                if user:
+                    self.client.force_login(user)
+                response = self.client.get(reverse("main:show_experience"))
+                html = response.content.decode()
+                self.assertEqual('data-action="star"' in html, user is not None)
+                self.assertEqual('id="experience-form"' in html, can_edit)
+                self.assertEqual('data-action="edit"' in html, can_edit)
+                self.assertEqual('id="add-experience"' in html, can_create)
+                self.assertEqual('data-action="delete"' in html, can_create)
 
     def test_star_can_be_added_and_removed_by_one_user(self):
         self.client.force_login(self.regular)

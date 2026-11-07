@@ -1,89 +1,82 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Experience - {{ name }}{% endblock title %}
 
 {% block content %}
-    <main>
-        <section class="experience-section" id="experience">
-            <div class="container">
-                <p class="section-kicker">Perjalanan saya sejauh ini</p>
-                <div class="section-header">
-                    <h1>Experience</h1>
-
-                    {% if user.is_superuser %}
-                        <a href="{% url 'main:create_experience' %}"
-                           class="button add-button">
-                            <span aria-hidden="true">+</span>
-                            Tambah Pengalaman
-                        </a>
-                    {% endif %}
-                </div>
-
-                <form method="get"
-                      action="{% url 'main:show_experience' %}"
-                      class="search-form"
-                      data-live-search
-                      data-live-search-target=".experience-grid">
-                    <input type="search"
-                           name="title"
-                           value="{{ title_query }}"
-                           placeholder="Cari berdasarkan judul pengalaman"
-                           class="search-form__input"
-                           aria-label="Cari berdasarkan judul pengalaman">
-
-                    <button type="submit" class="button">Cari</button>
-                </form>
-
-                <div class="experience-grid">
-                    {% for experience in experience_list %}
-                        <article class="experience-card">
-                            {% if experience.thumbnail %}
-                                <img src="{{ experience.thumbnail }}"
-                                     alt="Gambar {{ experience.title }}"
-                                     class="experience-thumbnail"
-                                     loading="lazy">
-                            {% endif %}
-                            <span class="experience-category">
-                                {{ experience.get_category_display }}
-                            </span>
-                            <h2>{{ experience.title }}</h2>
-                            <p class="experience-description">
-                                {{ experience.description }}
-                            </p>
-
-                            {% if experience.is_ongoing %}
-                                <p class="experience-status">Sedang berlangsung</p>
-                            {% else %}
-                                <p class="experience-status">Selesai</p>
-                            {% endif %}
-
-                        {% if user.is_superuser or is_editor %}
-                            <div class="card-actions">
-                                <a href="{% url 'main:update_experience' experience.id %}"
-                                class="button button-secondary">
-                                    Ubah
-                                </a>
-
-                                {% if user.is_superuser %}
-                                    {% url 'main:delete_experience' experience.id as delete_url %}
-                                    {% include "components/delete_modal.html" with item_id=experience.id item_label=experience.title delete_url=delete_url noun="pengalaman" %}
-                                {% endif %}
-                            </div>
-                        {% endif %}
-                        </article>
-                        {% empty %}
-                        {% if title_query %}
-                            <p class="empty-state">
-                                Tidak ada pengalaman dengan judul tersebut.
-                            </p>
-                        {% else %}
-                            <p class="empty-state">
-                                Belum ada pengalaman yang ditambahkan.
-                            </p>
-                        {% endif %}
-                    {% endfor %}
-                </div>
+<main>
+    <section class="experience-section" id="experience"
+             data-list-url="{% url 'api:experience-list' %}"
+             data-detail-url="{% url 'api:experience-detail' '00000000-0000-0000-0000-000000000000' %}"
+             data-star-url="{% url 'api:experience-star' '00000000-0000-0000-0000-000000000000' %}">
+        <div class="container">
+            <p class="section-kicker">Perjalanan saya sejauh ini</p>
+            <div class="section-header">
+                <h1>Experience</h1>
+                {% if user.is_superuser %}
+                <button id="add-experience" type="button" class="button add-button">Tambah Pengalaman</button>
+                {% endif %}
             </div>
-        </section>
-    </main>
+
+            <form id="experience-search" class="search-form" method="get">
+                <input type="search" name="title" class="search-form__input"
+                       value="{{ title_query }}" aria-label="Cari berdasarkan judul pengalaman"
+                       placeholder="Cari berdasarkan judul pengalaman">
+                <button class="button" type="submit">Cari</button>
+            </form>
+
+            {% if user.is_superuser or is_editor %}
+            <section id="experience-editor" hidden aria-labelledby="editor-heading">
+                <h2 id="editor-heading">Ubah pengalaman</h2>
+                <form id="experience-form" class="entry-form">
+                    {% for field in form %}
+                    <div class="form-group{% if field.widget_type == 'checkbox' %} form-group--checkbox{% endif %}">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                    </div>
+                    {% endfor %}
+                    <button class="button" type="submit">Simpan</button>
+                    <button class="button button-secondary" type="button" id="cancel-experience">Batal</button>
+                </form>
+            </section>
+            {% endif %}
+
+            <noscript>Aktifkan JavaScript untuk berinteraksi dengan pengalaman, atau
+                <a href="{% url 'api:experience-list' %}">buka daftar di API</a>.</noscript>
+            <p id="experience-status" class="empty-state" role="status">Memuat pengalaman…</p>
+            <div id="experience-list" class="experience-grid"></div>
+
+            <template id="experience-card">
+                <article class="experience-card">
+                    <span class="experience-category"></span>
+                    <h2></h2>
+                    <p class="experience-description"></p>
+                    <p class="experience-status"></p>
+                    <div class="card-actions">
+                        {% if user.is_authenticated %}
+                        <button type="button" data-action="star" class="button button-star">
+                            <span class="star-label"></span><span class="star-count"></span>
+                        </button>
+                        {% else %}
+                        <a class="button button-star" href="{% url 'main:login' %}?next={{ request.get_full_path|urlencode }}">
+                            Login untuk star <span class="star-count"></span>
+                        </a>
+                        {% endif %}
+                        {% if user.is_superuser or is_editor %}
+                        <button type="button" data-action="edit" class="button button-secondary">Ubah</button>
+                        {% endif %}
+                        {% if user.is_superuser %}
+                        <button type="button" data-action="delete" class="button button-danger">Hapus</button>
+                        {% endif %}
+                    </div>
+                </article>
+            </template>
+            {{ category_labels|json_script:"experience-categories" }}
+        </div>
+    </section>
+</main>
 {% endblock content %}
+
+{% block scripts %}
+<script src="{% static 'js/experience.js' %}" defer></script>
+{% endblock scripts %}
