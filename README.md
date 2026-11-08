@@ -2017,3 +2017,152 @@ Karena itu proteksi diterapkan berlapis (*defence in depth*):
 - **Diagnosis AI tidak selalu tepat sasaran.** Beberapa saran perbaikan awal tidak memperhitungkan perilaku Django yang halus (mis. query agregasi yang mengabaikan `Meta.ordering`), sehingga tetap harus diverifikasi dengan SQL dan test sebelum diterima.
 - **Test hasil draf AI bisa memberi hasil positif palsu.** Test kebocoran username versi awal lolos hanya karena database uji kosong; saya perbaiki dengan menambahkan star *sebelum* memeriksa respons anonim.
 - **Semua klaim diverifikasi sendiri** — `python manage.py test` (136 test), `node --check` untuk berkas JS, dan pengujian manual per peran di `runserver` sebelum perubahan dianggap selesai. Keputusan akhir, penyesuaian ke struktur proyek, dan penjalanan kode dilakukan oleh saya.
+
+## Tugas 6 — Django REST Framework untuk Experience
+
+### Tujuan dan Ruang Lingkup
+
+Pada Tutorial 07, model padanan Projects pada proyek ini adalah Education. Karena Tugas 6 meminta pola Django REST Framework diterapkan pada bagian portofolio yang berbeda dari model tutorial, target implementasi ini adalah **Experience**.
+
+Tugas ini menambahkan relasi star pada Experience, REST API versioned, serializer dan permission berbasis peran, halaman Experience berbasis fetch, tes API, dan fitur ekstra filter Experience berbintang. Migration **0011_experience_starred_by** menambahkan relasi pengguna dan Experience tanpa menghapus data yang sudah ada.
+
+### Menjalankan Tugas 6 Secara Lokal
+
+Tidak ada dependensi baru di luar requirements.txt. Aktifkan virtual environment, pasang dependensi, lalu jalankan migrasi dan tes:
+
+~~~powershell
+.\env\Scripts\python.exe -m pip install -r requirements.txt
+.\env\Scripts\python.exe manage.py migrate
+.\env\Scripts\python.exe manage.py test main
+.\env\Scripts\python.exe manage.py runserver
+~~~
+
+Pada macOS atau Linux, gunakan interpreter virtual environment yang sesuai. Setelah migration 0011 diterapkan, Experience lama tetap tersedia dan memiliki jumlah star nol sampai pengguna memberi star.
+
+Halaman Experience berada di **/experience/**. Browsable API dan endpoint JSON berada di bawah **/api/v1/**.
+
+### Endpoint Experience
+
+| Endpoint | Metode | Hak akses dan perilaku |
+|---|---|---|
+| **/api/v1/experiences/** | GET, HEAD | Semua peran membaca daftar. Mendukung parameter **title** dan **starred=true**. |
+| **/api/v1/experiences/** | POST | Hanya Pemilik membuat Experience. Respons berhasil memakai 201. |
+| **/api/v1/experiences/<uuid>/** | GET, HEAD | Semua peran membaca detail. |
+| **/api/v1/experiences/<uuid>/** | PUT, PATCH | Editor dan Pemilik memperbarui data. |
+| **/api/v1/experiences/<uuid>/** | DELETE | Hanya Pemilik menghapus. Respons berhasil memakai 204 tanpa body. |
+| **/api/v1/experiences/<uuid>/star/** | POST | Pengguna login memberi atau membatalkan star untuk akunnya sendiri. |
+
+### Pemetaan Hak Akses
+
+| Peran | Baca daftar/detail | Star | PUT/PATCH | POST/DELETE |
+|---|---|---|---|---|
+| Pengunjung | Ya | Tidak | Tidak | Tidak |
+| Pengguna | Ya | Ya | Tidak | Tidak |
+| Editor | Ya | Ya | Ya | Tidak |
+| Pemilik atau superuser | Ya | Ya | Ya | Ya |
+
+Endpoint daftar dan detail memakai **IsPortfolioOwnerOrEditorOrReadOnly**. Endpoint star memakai **IsAuthenticated**, lalu pengguna pemberi star selalu diambil dari **request.user**.
+
+### Serializer, Validasi, dan Keamanan Data
+
+**ExperienceSerializer** adalah ModelSerializer dengan daftar field eksplisit. **star_count**, **is_starred**, dan **is_ongoing** adalah hasil perhitungan read-only. **is_finished** hanya digunakan ketika menulis untuk menentukan nilai **ended_at**.
+
+Judul dan deskripsi dibersihkan menggunakan **strip_tags** dan ditolak bila kosong setelah dibersihkan. Kategori dan URL thumbnail memakai validasi serializer. API tidak mengirim daftar pengguna pemberi star, alamat email, atau password hash.
+
+Daftar Experience menghitung jumlah star dan status star pengguna dengan annotation query dan subquery Exists. Pendekatan ini menghindari query relasi star tambahan untuk setiap kartu.
+
+### Integrasi Halaman Experience
+
+Halaman **/experience/** mengirim kerangka HTML. **static/js/experience.js** mengambil daftar dari API dan memperbarui kartu, pencarian, tambah, ubah, hapus, dan star tanpa reload.
+
+Aksi tulis mengirim header **X-CSRFToken** dari cookie Django. Teks dari API dimasukkan dengan **textContent**, bukan innerHTML. Respons 400 dan 403 ditampilkan melalui toast.
+
+### Fitur Tambahan — Filter “Berbintang saya”
+
+Pengguna login dapat mengaktifkan checkbox **Berbintang saya** di samping pencarian Experience. Filter ini dapat digabung dengan kata kunci judul, memperbarui URL, dan memuat daftar melalui **?starred=true** tanpa reload.
+
+Membatalkan star saat filter aktif membuat kartu itu hilang dari daftar setelah respons API diterima. Halaman membedakan pesan kosong untuk pencarian biasa dan untuk daftar Experience yang belum diberi star. Request anonim dengan parameter starred mengembalikan daftar kosong agar relasi star pengguna lain tidak terlihat.
+
+### Pengujian
+
+**ExperienceAPITest** mencakup pembacaan publik, pencarian, 404, validasi, computed field read-only, star, PUT/PATCH, status 204, empat peran, dan CSRF berbasis sesi. Tes penolakan juga memeriksa database setelah request, bukan hanya status respons.
+
+Tes CSRF memakai **APIClient(enforce_csrf_checks=True)** dan **login()**. Pada versi akhir, perintah berikut menghasilkan **161 tests, OK**:
+
+~~~powershell
+.\env\Scripts\python.exe manage.py test main
+~~~
+
+### Tugas 6
+
+#### 1. Apa itu REST, mengapa JSON saja belum cukup, serta perbedaan PUT dan PATCH?
+
+REST adalah gaya arsitektur untuk sistem berbasis resource. Resource memiliki URI, misalnya **/api/v1/experiences/<uuid>/**, kemudian klien memakai interface HTTP seragam untuk berinteraksi. GET membaca representasi, POST membuat, PUT atau PATCH memperbarui, dan DELETE menghapus. REST juga memisahkan klien dari server dan menangani setiap request secara stateless.
+
+JSON hanya format representasi data. Endpoint yang selalu mengirim JSON belum tentu RESTful jika URI, metode HTTP, status respons, dan operasi resource tidak konsisten. API Experience memakai collection dan detail resource, metode HTTP yang sesuai, serta status 201, 204, 400, 403, dan 404 untuk membentuk kontrak yang dapat dipahami klien.
+
+PUT mengganti representasi resource secara lengkap sehingga field wajib harus dikirim. PATCH cukup mengirim field yang berubah. Editor memakai PATCH untuk mengubah deskripsi tanpa mengirim judul, kategori, dan thumbnail. PUT tepat ketika klien menyimpan seluruh representasi terbaru, sedangkan PATCH cocok untuk perubahan kecil atau editor inline.
+
+#### 2. Apa peran serializer pada Django REST Framework dan keuntungannya dibandingkan JsonResponse manual?
+
+Serializer mengubah model atau query ORM menjadi data primitif untuk respons JSON, dan memvalidasi payload saat menerima input. ExperienceSerializer memvalidasi tipe field, choice kategori, URL thumbnail, dan aturan tambahan sebelum menghasilkan validated_data untuk disimpan.
+
+Serializer juga menjadi kontrak API eksplisit. Field tidak memakai __all__, nilai hasil perhitungan ditandai read-only, dan judul serta deskripsi dibersihkan di validate_title serta validate_description. DRF lalu menghasilkan error validasi 400 yang terstruktur.
+
+Dengan JsonResponse manual, developer harus merakit dictionary, melakukan validasi, mengonversi jenis data, menangani partial update, dan menjaga format error sendiri. JsonResponse tetap cocok untuk bentuk respons yang sangat khusus, tetapi serializer mengurangi pengulangan dan menjaga representasi serta validasi konsisten.
+
+#### 3. Apa perbedaan autentikasi dan otorisasi, dan mengapa permission class harus diperiksa di server?
+
+Autentikasi menjawab siapa pengirim request. Di API ini, SessionAuthentication membaca sesi Django dan menetapkan request.user. Otorisasi menjawab apakah pengguna tersebut berhak melakukan aksi. IsPortfolioOwnerOrEditorOrReadOnly dan IsAuthenticated mengambil keputusan berdasarkan peran serta metode HTTP.
+
+Menyembunyikan tombol hanya mengubah tampilan bagi pengguna biasa. Pengguna masih dapat membuka endpoint API langsung, menulis fetch sendiri, atau memodifikasi DOM. Permission class di server menghentikan request tidak sah dengan 403 sebelum database berubah.
+
+#### 4. Mengapa request pengubah data dengan SessionAuthentication memerlukan CSRF token, dan mengapa force_authenticate tidak cukup?
+
+SessionAuthentication memakai cookie sesi. Browser mengirim cookie otomatis ke domain aplikasi, sehingga situs lain berpotensi memancing browser pengguna login untuk membuat request pengubah data. Token CSRF membuktikan request berasal dari halaman yang memperoleh token Django, bukan sekadar request lintas situs yang membawa cookie.
+
+Karena itu JavaScript Experience mengirim X-CSRFToken pada aksi tulis. force_authenticate hanya menyuntikkan pengguna ke request test dan tidak membuktikan alur login sesi atau pemeriksaan CSRF. Tes terpisah memakai APIClient(enforce_csrf_checks=True) serta login(), membuktikan POST tanpa token ditolak dan POST dengan token dari halaman Experience berhasil.
+
+## AI Disclosure Tugas 6
+
+### Tools dan Peran AI
+
+- **OpenAI Codex** digunakan untuk meninjau struktur proyek, memetakan tugas ke model Experience, membuat draf patch, menyusun tes, menjalankan pemeriksaan, dan menyusun dokumentasi ini.
+- Saya sebagai pemilik proyek meninjau perubahan, melakukan commit, dan melakukan push ke GitHub sendiri.
+
+### Strategi Prompting
+
+1. **Berbasis kode yang ada** — konteks model, permission, endpoint Education Tutorial 07, Experience, dan tes yang sudah ada dipakai sebelum perubahan dirancang.
+2. **Berbasis rubrik** — instruksi diterjemahkan menjadi matriks peran, status HTTP, validasi, CSRF, dan tes database.
+3. **Bertahap** — pekerjaan dipisahkan menjadi relasi star, API, integrasi UI, tes, fitur ekstra, dan dokumentasi agar riwayat commit menunjukkan progres.
+4. **Verification-driven** — setiap patch diperiksa dengan git diff check, pemeriksaan sintaks JavaScript, dan python manage.py test main.
+
+### Bagian yang Dibantu AI
+
+| Bagian | Bantuan AI | Verifikasi atau keputusan manual |
+|---|---|---|
+| Pemilihan model | Membandingkan Education sebagai padanan Projects Tutorial 07 dengan Experience | Memilih Experience agar target tugas berbeda dari model tutorial |
+| Serializer dan API | Draf serializer, collection/detail/star, status HTTP, dan annotation star | Meninjau field eksplisit, hak akses, serta data akun yang tidak boleh keluar |
+| Halaman Experience | Draf fetch API, form, toast, CSRF, dan rendering textContent | Memeriksa kontrol antarmuka berdasarkan peran |
+| Pengujian | Matriks pengunjung, pengguna, Editor, Pemilik, validasi, star, dan CSRF | Menjalankan 161 tes serta memeriksa database pada penolakan |
+| Fitur ekstra | Draf filter Berbintang saya yang terikat sesi pengguna | Menambah tes isolasi hasil filter antar-akun |
+| Dokumentasi | Struktur endpoint, refleksi, log prompting, dan disclosure | Mencocokkan uraian dengan kode yang di-commit |
+
+### Log Prompting Ringkas
+
+| Tahap | Ringkasan kebutuhan | Hasil yang dipakai |
+|---|---|---|
+| Analisis tugas | Memetakan Projects tutorial ke model proyek | Education menjadi model Tutorial 07, Experience menjadi target Tugas 6 |
+| API | Menerapkan serializer, permission, CRUD, star, dan status HTTP | Endpoint versioned di bawah /api/v1/experiences/ |
+| UI | Menampilkan operasi API tanpa reload dan dengan CSRF | experience.js dan template Experience berbasis fetch |
+| Tes | Memeriksa empat peran, validasi, star, dan CSRF sesi | ExperienceAPITest |
+| Kreativitas | Menambah interaksi di luar checklist | Filter Berbintang saya |
+| Dokumentasi | Menjawab refleksi dan penggunaan AI secara spesifik | Bagian Tugas 6 ini |
+
+### Keterbatasan AI dan Perbaikan Manual
+
+- Draf awal tes Experience melewatkan import timezone untuk skenario mempertahankan tanggal selesai. Eksekusi tes menemukan NameError, lalu import ditambahkan dan tes dijalankan ulang.
+- Draf awal patch filter star memiliki header hunk tidak valid. git apply --check menangkapnya sebelum patch digunakan, kemudian header diperbaiki dan diperiksa ulang.
+- force_authenticate tidak menguji CSRF sesi. Karena itu permission test tidak dipakai sebagai bukti CSRF. Tes tambahan memakai APIClient dengan enforce_csrf_checks dan login.
+- Percobaan browser headless pada satu lingkungan mengalami timeout koneksi loopback. Hasil tersebut tidak dipakai sebagai bukti interface. Verifikasi yang terdokumentasi mengandalkan suite Django dan pemeriksaan sintaks JavaScript; pengujian browser lokal per peran tetap perlu dilakukan sebelum pengumpulan.
+- AI dapat menghasilkan kode atau dokumentasi yang tampak benar tetapi tidak sesuai struktur proyek. Route, namespace, relasi model, respons API, dan klaim dokumentasi diperiksa kembali terhadap kode serta hasil tes sebelum digunakan.
